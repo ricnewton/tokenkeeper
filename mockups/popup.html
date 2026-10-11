@@ -1,0 +1,375 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>TokenKeeper · popup layout mockups</title>
+<style>
+  :root {
+    --font: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    --green: #3cc878; --amber: #f0b030; --red: #f04e4e; --purple: #c050f0;
+  }
+  body.dark {
+    --desk: #0b1a2e; --bg: rgba(32,32,32,.94); --stroke: rgba(255,255,255,.08);
+    --fg: #fff; --fg2: rgba(255,255,255,.66); --fg3: rgba(255,255,255,.4);
+    --card: rgba(255,255,255,.05); --track: rgba(255,255,255,.12); --accent: #60cdff;
+  }
+  body.light {
+    --desk: #c9d6e8; --bg: rgba(243,243,243,.94); --stroke: rgba(0,0,0,.08);
+    --fg: #1a1a1a; --fg2: rgba(0,0,0,.62); --fg3: rgba(0,0,0,.4);
+    --card: rgba(255,255,255,.7); --track: rgba(0,0,0,.1); --accent: #005fb8;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; font-family: var(--font); font-size: 13px; color: var(--fg);
+    background: radial-gradient(circle at 20% 10%, #31507a 0, transparent 50%), var(--desk);
+    min-height: 100vh;
+  }
+  header.controls {
+    position: sticky; top: 0; z-index: 5; display: flex; gap: 24px; align-items: center; flex-wrap: wrap;
+    padding: 12px 24px; background: rgba(0,0,0,.55); color: #fff; backdrop-filter: blur(8px);
+  }
+  header.controls h1 { font-size: 15px; margin: 0 12px 0 0; font-weight: 600; }
+  header.controls label { display: flex; gap: 8px; align-items: center; }
+  .grid { display: flex; flex-wrap: wrap; gap: 40px; padding: 32px 24px; align-items: flex-start; }
+  .variant > h2 { color: #fff; font-size: 14px; font-weight: 600; margin: 0 0 4px; text-shadow: 0 1px 2px #000; }
+  .variant > p { color: rgba(255,255,255,.8); margin: 0 0 12px; max-width: 360px; font-size: 12px; line-height: 1.4; text-shadow: 0 1px 2px #000; }
+
+  .flyout {
+    background: var(--bg); border: 1px solid var(--stroke); border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,.45); backdrop-filter: blur(30px) saturate(1.4);
+    overflow: hidden;
+  }
+  .row { display: flex; align-items: center; gap: 8px; }
+  .between { justify-content: space-between; }
+  .muted { color: var(--fg2); }
+  .faint { color: var(--fg3); font-size: 11px; }
+  .big { font-size: 28px; font-weight: 600; font-family: "Segoe UI Variable Display", var(--font); line-height: 1; }
+  .mid { font-size: 18px; font-weight: 600; }
+  .hdr { padding: 12px 14px 8px; }
+  .body { padding: 4px 14px 12px; }
+  .footer { padding: 8px 14px; border-top: 1px solid var(--stroke); font-size: 11px; color: var(--fg3); }
+  .iconbtn { width: 28px; height: 28px; border-radius: 4px; display: grid; place-items: center; color: var(--fg2); cursor: default; }
+  .iconbtn:hover { background: var(--card); }
+  .logo { width: 18px; height: 18px; border-radius: 4px; background: linear-gradient(135deg,#fff,#888); display: inline-block; }
+  .badge { font-size: 10px; padding: 1px 6px; border-radius: 10px; background: var(--card); color: var(--fg2); border: 1px solid var(--stroke); }
+  .card { background: var(--card); border: 1px solid var(--stroke); border-radius: 6px; padding: 8px 10px; }
+  .kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .kpi .v { font-size: 15px; font-weight: 600; }
+  .kpi .l { font-size: 11px; color: var(--fg2); }
+  .bar { position: relative; height: 8px; border-radius: 4px; background: var(--track); overflow: visible; }
+  .bar > .fill { position: absolute; inset: 0 auto 0 0; border-radius: 4px; }
+  .bar > .tick { position: absolute; top: -3px; bottom: -3px; width: 2px; background: var(--fg); border-radius: 1px; }
+  .bar > .proj { position: absolute; top: -3px; bottom: -3px; width: 0; border-left: 2px dashed var(--fg3); }
+  .models .m { display: grid; grid-template-columns: 1fr 52px; gap: 2px 8px; align-items: center; margin: 6px 0; }
+  .models .m .bar { height: 4px; grid-column: 1 / span 2; }
+  .seg { display: flex; background: var(--card); border: 1px solid var(--stroke); border-radius: 6px; padding: 2px; }
+  .seg button { flex: 1; font: inherit; color: var(--fg2); background: none; border: 0; padding: 4px 0; border-radius: 4px; cursor: pointer; }
+  .seg button.on { background: var(--bg); color: var(--fg); box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .tab { display: none; } .tab.on { display: block; }
+  .tooltip-native {
+    display: inline-block; background: var(--bg); border: 1px solid var(--stroke); border-radius: 6px;
+    padding: 6px 9px; font-size: 12px; line-height: 1.45; white-space: pre; box-shadow: 0 4px 12px rgba(0,0,0,.35);
+  }
+  .ctx { width: 260px; padding: 4px; }
+  .ctx div { padding: 7px 12px; border-radius: 4px; }
+  .ctx div:hover { background: var(--card); }
+  .ctx .sep { height: 1px; padding: 0; margin: 4px 0; background: var(--stroke); }
+  .ctx .dis { color: var(--fg3); }
+  .taskbar {
+    margin-top: 10px; height: 40px; width: 300px; border-radius: 0; background: var(--bg); border-top: 1px solid var(--stroke);
+    display: flex; align-items: center; justify-content: flex-end; gap: 10px; padding: 0 12px; font-size: 11px;
+  }
+  .taskbar canvas { image-rendering: pixelated; }
+  svg text { fill: var(--fg); font-family: var(--font); }
+</style>
+</head>
+<body class="dark">
+<header class="controls">
+  <h1>TokenKeeper · popup mockups (fake data)</h1>
+  <label>Theme
+    <select id="theme"><option value="dark">Dark</option><option value="light">Light</option></select>
+  </label>
+  <label>Included used <input id="used" type="range" min="0" max="140" value="42"> <span id="usedv">42%</span></label>
+  <label>Units
+    <select id="units"><option value="usd">Dollars (cents-based plan)</option><option value="req">Requests (request-based plan)</option></select>
+  </label>
+</header>
+
+<main class="grid">
+
+  <section class="variant">
+    <h2>A · Glance</h2>
+    <p>Smallest useful popup on left-click: one ring, the headline numbers, and a pace verdict. No charts.</p>
+    <div class="flyout" style="width:300px">
+      <div class="hdr row between">
+        <div class="row"><span class="logo"></span><b>Cursor</b><span class="badge" data-plan></span></div>
+        <div class="row"><span class="iconbtn" title="Refresh">⟳</span><span class="iconbtn" title="Settings">⚙</span></div>
+      </div>
+      <div class="body row" style="gap:16px">
+        <svg width="96" height="96" viewBox="0 0 96 96" data-ring="96"></svg>
+        <div style="flex:1; display:grid; gap:6px">
+          <div><div class="mid" data-used-of></div><div class="faint">included this cycle</div></div>
+          <div><b data-today></b> <span class="muted">today</span></div>
+          <div class="muted" data-pace-text></div>
+        </div>
+      </div>
+      <div class="footer row between"><span data-resets></span><span>Updated 2 min ago</span></div>
+    </div>
+  </section>
+
+  <section class="variant">
+    <h2>B · Dashboard</h2>
+    <p>Everything on one screen: progress bar with today's pace tick and projected end-of-cycle marker, KPI tiles, a daily chart for the cycle (dashed line = even daily budget), and top models.</p>
+    <div class="flyout" style="width:360px">
+      <div class="hdr row between">
+        <div class="row"><span class="logo"></span><b>Cursor usage</b><span class="badge" data-plan></span></div>
+        <div class="row"><span class="iconbtn">⟳</span><span class="iconbtn">⚙</span></div>
+      </div>
+      <div class="body" style="display:grid; gap:10px">
+        <div>
+          <div class="row between" style="margin-bottom:6px">
+            <span><span class="big" data-pct></span> <span class="muted">of included</span></span>
+            <span class="muted" data-used-of></span>
+          </div>
+          <div class="bar" data-bar></div>
+          <div class="row between faint" style="margin-top:6px"><span data-cycle-start></span><span data-pace-text></span><span data-cycle-end></span></div>
+        </div>
+        <div class="kpis">
+          <div class="card kpi"><div class="v" data-today></div><div class="l">Today</div></div>
+          <div class="card kpi"><div class="v" data-yesterday></div><div class="l">Yesterday</div></div>
+          <div class="card kpi"><div class="v" data-avg7></div><div class="l">7-day average / day</div></div>
+          <div class="card kpi"><div class="v" data-budget></div><div class="l">Left per day to stay in plan</div></div>
+        </div>
+        <div class="card">
+          <div class="row between"><b>Daily usage this cycle</b><span class="faint">hover a bar</span></div>
+          <svg width="318" height="90" data-daily></svg>
+        </div>
+        <div class="card models">
+          <b>Top models this cycle</b>
+          <div data-models></div>
+        </div>
+      </div>
+      <div class="footer row between"><span data-resets></span><span>Updated 2 min ago · Open dashboard ↗</span></div>
+    </div>
+  </section>
+
+  <section class="variant">
+    <h2>C · Tabbed</h2>
+    <p>Compact like A, with depth behind tabs: Today (hourly), Cycle (daily) and History (past cycles, which answers "how much per month").</p>
+    <div class="flyout" style="width:340px">
+      <div class="hdr row between">
+        <div class="row"><span class="logo"></span><b>Cursor</b><span class="badge" data-plan></span></div>
+        <div class="row"><span class="iconbtn">⟳</span><span class="iconbtn">⚙</span></div>
+      </div>
+      <div class="body" style="display:grid; gap:10px">
+        <div class="row" style="gap:14px">
+          <svg width="64" height="64" viewBox="0 0 64 64" data-ring="64"></svg>
+          <div style="flex:1">
+            <div class="mid" data-used-of></div>
+            <div class="bar" data-bar style="margin:8px 0 4px"></div>
+            <div class="faint" data-pace-text></div>
+          </div>
+        </div>
+        <div class="seg" data-seg>
+          <button data-tab="today">Today</button><button class="on" data-tab="cycle">This cycle</button><button data-tab="history">History</button>
+        </div>
+        <div class="tab" data-pane="today"><svg width="310" height="96" data-hourly></svg></div>
+        <div class="tab on" data-pane="cycle"><svg width="310" height="96" data-daily></svg></div>
+        <div class="tab" data-pane="history"><svg width="310" height="96" data-history></svg></div>
+      </div>
+      <div class="footer row between"><span data-resets></span><span>Updated 2 min ago</span></div>
+    </div>
+  </section>
+
+  <section class="variant">
+    <h2>D · Hover card</h2>
+    <p>Custom-drawn card shown while hovering the icon (tray-icon reports Enter/Leave on Windows). It replaces the plain tooltip; click still opens A, B or C.</p>
+    <div class="flyout" style="width:250px; padding:10px 12px; display:grid; gap:6px">
+      <div class="row between"><b>Cursor</b><span class="muted" data-pct></span></div>
+      <div class="bar" data-bar></div>
+      <div class="row between faint"><span data-used-of></span><span data-resets-short></span></div>
+      <div class="faint"><span data-today></span> today · <span data-pace-short></span></div>
+    </div>
+  </section>
+
+  <section class="variant">
+    <h2>E · Native tooltip + menu only</h2>
+    <p>Zero custom UI: standard Windows tooltip (max 127 chars) on hover, details in the right-click menu. Smallest and most robust, but no charts. This is what the running prototype shows on hover.</p>
+    <div class="tooltip-native" data-native-tip></div>
+    <div style="height:12px"></div>
+    <div class="flyout ctx">
+      <div class="dis" data-ctx-head></div>
+      <div class="sep"></div>
+      <div class="dis" data-ctx-today></div>
+      <div class="dis" data-ctx-avg></div>
+      <div class="dis" data-ctx-proj></div>
+      <div class="sep"></div>
+      <div>Refresh now</div>
+      <div>Open Cursor dashboard ↗</div>
+      <div>Start with Windows ✓</div>
+      <div>Sign out</div>
+      <div class="sep"></div>
+      <div>Quit</div>
+    </div>
+    <div class="taskbar"><canvas width="16" height="16" style="width:16px;height:16px" data-tray16></canvas><canvas width="24" height="24" style="width:24px;height:24px" data-tray24></canvas><span>07:42<br>06/10/2026</span></div>
+  </section>
+
+</main>
+
+<script>
+const CYCLE_DAYS = 30, ELAPSED_DAYS = 16.5;
+const cycleStart = new Date(2026, 8, 20), cycleEnd = new Date(2026, 9, 20);
+const MODELS = [["claude-4.6-opus-high-thinking", .46], ["gpt-5.5-codex", .22], ["composer-2", .18], ["auto", .14]];
+
+function rng(seed) { return () => (seed = (seed * 16807) % 2147483647) / 2147483647; }
+const r = rng(7);
+const dailyShape = Array.from({ length: CYCLE_DAYS }, (_, i) => {
+  const d = new Date(cycleStart); d.setDate(d.getDate() + i);
+  const weekend = d.getDay() === 0 || d.getDay() === 6;
+  return (weekend ? .15 : 1) * (.4 + r() * 1.2);
+});
+const hourlyShape = Array.from({ length: 24 }, (_, h) => (h >= 8 && h <= 18 ? .5 + r() : r() * .08));
+const historyShape = [.71, .88, 1.12, .64, .93];
+
+const S = { used: .42, units: "usd" };
+const LIMIT = { usd: 20000, req: 500 };
+
+function fmt(v) {
+  return S.units === "usd" ? "$" + (v / 100).toFixed(2) : Math.round(v) + " req";
+}
+function color(f) { return f >= 1 ? "var(--red)" : f >= .8 ? "var(--amber)" : "var(--green)"; }
+function colorHex(f) { return f >= 1 ? "#f04e4e" : f >= .8 ? "#f0b030" : "#3cc878"; }
+
+function model() {
+  const limit = LIMIT[S.units], used = S.used * limit;
+  const past = dailyShape.slice(0, Math.ceil(ELAPSED_DAYS));
+  const shapeSum = past.reduce((a, b) => a + b, 0);
+  const daily = dailyShape.map((v, i) => i < past.length ? v / shapeSum * used : null);
+  const todayIdx = past.length - 1;
+  const today = daily[todayIdx] * .5, yesterday = daily[todayIdx - 1];
+  const avg7 = daily.slice(todayIdx - 7, todayIdx).reduce((a, b) => a + b, 0) / 7;
+  const elapsedF = ELAPSED_DAYS / CYCLE_DAYS, proj = S.used / elapsedF;
+  const daysLeft = CYCLE_DAYS - ELAPSED_DAYS;
+  const budget = Math.max(0, limit - used) / daysLeft;
+  return { limit, used, daily, todayIdx, today, yesterday, avg7, elapsedF, proj, daysLeft, budget };
+}
+
+function ringSvg(size, f, elapsedF) {
+  const sw = size * .12, rad = size / 2 - sw / 2 - 1, c = 2 * Math.PI * rad, fill = Math.min(f, 1);
+  const a = elapsedF * 2 * Math.PI - Math.PI / 2;
+  const x1 = size / 2 + Math.cos(a) * (rad - sw / 2 - 2), y1 = size / 2 + Math.sin(a) * (rad - sw / 2 - 2);
+  const x2 = size / 2 + Math.cos(a) * (rad + sw / 2 + 1), y2 = size / 2 + Math.sin(a) * (rad + sw / 2 + 1);
+  return `<circle cx="${size/2}" cy="${size/2}" r="${rad}" fill="none" stroke="var(--track)" stroke-width="${sw}"/>
+    <circle cx="${size/2}" cy="${size/2}" r="${rad}" fill="none" stroke="${color(f)}" stroke-width="${sw}"
+      stroke-dasharray="${c * fill} ${c}" stroke-linecap="round" transform="rotate(-90 ${size/2} ${size/2})"/>
+    <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="var(--fg)" stroke-width="2" stroke-linecap="round"/>
+    <text x="50%" y="50%" text-anchor="middle" dominant-baseline="central" font-size="${size * .24}" font-weight="600">${Math.round(f * 100)}%</text>`;
+}
+
+function barHtml(f, elapsedF, proj) {
+  const projPos = Math.min(proj, 1.4) / 1.4 * 100;
+  const scale = 1.4;
+  return `<div class="fill" style="width:${Math.min(f, scale) / scale * 100}%;background:${color(f)}"></div>
+    <div class="tick" style="left:calc(${elapsedF * (1 / scale) * 100}% - 1px)" title="Today (time elapsed in cycle)"></div>
+    <div class="proj" style="left:${projPos}%" title="Projected at cycle end"></div>
+    <div style="position:absolute;left:${100 / scale}%;top:-4px;bottom:-4px;width:1px;background:var(--fg3)" title="Included limit"></div>`;
+}
+
+function barsSvg(w, h, values, { highlight = -1, budget = null, labels = [], max = null, colorFor = () => "var(--accent)" } = {}) {
+  const n = values.length, gap = 2, bw = (w - gap * (n - 1)) / n, top = 6, bottom = 14;
+  const m = max ?? Math.max(...values.filter(v => v != null), budget ?? 0) * 1.1;
+  let out = "";
+  values.forEach((v, i) => {
+    const x = i * (bw + gap);
+    if (v == null) { out += `<rect x="${x}" y="${h - bottom - 2}" width="${bw}" height="2" rx="1" fill="var(--track)"/>`; return; }
+    const bh = Math.max(2, v / m * (h - top - bottom));
+    out += `<rect x="${x}" y="${h - bottom - bh}" width="${bw}" height="${bh}" rx="1.5" fill="${colorFor(v, i)}" opacity="${i === highlight ? 1 : .75}"><title>${labels[i] ?? ""} ${fmt(v)}</title></rect>`;
+  });
+  if (budget != null) {
+    const y = h - bottom - budget / m * (h - top - bottom);
+    out += `<line x1="0" x2="${w}" y1="${y}" y2="${y}" stroke="var(--fg3)" stroke-dasharray="3 3"/>`;
+  }
+  labels.forEach((l, i) => {
+    if (l && (i % Math.ceil(n / 6) === 0 || i === n - 1)) out += `<text x="${i * (bw + gap) + bw / 2}" y="${h - 2}" text-anchor="middle" font-size="9" opacity=".55">${l}</text>`;
+  });
+  return out;
+}
+
+const dayLabel = i => { const d = new Date(cycleStart); d.setDate(d.getDate() + i); return d.getDate() + "/" + (d.getMonth() + 1); };
+const short = d => d.toLocaleDateString("en-GB", { day: "numeric", month: "short" });
+
+function drawTrayIcon(canvas, f, elapsedF) {
+  const s = canvas.width, ctx = canvas.getContext("2d"), c = s / 2, ro = c - .5, w = Math.max(2.5, s * .22);
+  ctx.clearRect(0, 0, s, s);
+  ctx.lineWidth = w;
+  ctx.strokeStyle = document.body.classList.contains("dark") ? "rgba(255,255,255,.25)" : "rgba(0,0,0,.18)";
+  ctx.beginPath(); ctx.arc(c, c, ro - w / 2, 0, 2 * Math.PI); ctx.stroke();
+  ctx.strokeStyle = colorHex(f);
+  ctx.beginPath(); ctx.arc(c, c, ro - w / 2, -Math.PI / 2, -Math.PI / 2 + Math.min(f, 1) * 2 * Math.PI); ctx.stroke();
+  const a = -Math.PI / 2 + elapsedF * 2 * Math.PI;
+  ctx.lineWidth = 1.2; ctx.strokeStyle = document.body.classList.contains("dark") ? "#fff" : "#1a1a1a";
+  ctx.beginPath(); ctx.moveTo(c + Math.cos(a) * (ro - w - 1), c + Math.sin(a) * (ro - w - 1)); ctx.lineTo(c + Math.cos(a) * ro, c + Math.sin(a) * ro); ctx.stroke();
+}
+
+function render() {
+  const m = model(), f = S.used;
+  const set = (sel, v) => document.querySelectorAll(sel).forEach(e => (e.innerHTML = v));
+  const paceWord = m.proj > 1.02 ? `On pace for ~${Math.round(m.proj * 100)}% (over)` : m.proj > .9 ? `On pace for ~${Math.round(m.proj * 100)}% (tight)` : `On pace for ~${Math.round(m.proj * 100)}%`;
+  set("[data-plan]", "Enterprise");
+  set("[data-pct]", Math.round(f * 100) + "%");
+  set("[data-used-of]", `${fmt(m.used)} <span class="muted" style="font-weight:400">/ ${fmt(m.limit)}</span>`);
+  set("[data-today]", fmt(m.today));
+  set("[data-yesterday]", fmt(m.yesterday));
+  set("[data-avg7]", fmt(m.avg7));
+  set("[data-budget]", fmt(m.budget));
+  set("[data-pace-text]", paceWord);
+  set("[data-pace-short]", `pace ~${Math.round(m.proj * 100)}%`);
+  set("[data-resets]", `Resets ${short(cycleEnd)} (${Math.ceil(m.daysLeft)} days)`);
+  set("[data-resets-short]", `resets in ${Math.ceil(m.daysLeft)}d`);
+  set("[data-cycle-start]", short(cycleStart));
+  set("[data-cycle-end]", short(cycleEnd));
+  document.querySelectorAll("[data-ring]").forEach(e => (e.innerHTML = ringSvg(+e.dataset.ring, f, m.elapsedF)));
+  document.querySelectorAll("[data-bar]").forEach(e => (e.innerHTML = barHtml(f, m.elapsedF, m.proj)));
+
+  let cum = 0;
+  const overColor = (v, i) => { cum = i === 0 ? v : cum + v; return cum > m.limit ? "var(--purple)" : "var(--accent)"; };
+  document.querySelectorAll("[data-daily]").forEach(e => {
+    cum = 0;
+    e.innerHTML = barsSvg(+e.getAttribute("width"), +e.getAttribute("height"), m.daily,
+      { highlight: m.todayIdx, budget: m.limit / CYCLE_DAYS, labels: m.daily.map((_, i) => dayLabel(i)), colorFor: overColor });
+  });
+  const nowH = 7;
+  const hs = hourlyShape.slice(0, nowH + 1).reduce((a, b) => a + b, 0);
+  document.querySelectorAll("[data-hourly]").forEach(e => (e.innerHTML = barsSvg(310, 96,
+    hourlyShape.map((v, h) => h <= nowH ? v / hs * m.today : null),
+    { highlight: nowH, labels: hourlyShape.map((_, h) => h + ":00") })));
+  const hist = [...historyShape.map(v => v * m.limit), m.used];
+  const histLabels = ["Apr", "May", "Jun", "Jul", "Aug", "Sep→"];
+  document.querySelectorAll("[data-history]").forEach(e => (e.innerHTML = barsSvg(310, 96, hist,
+    { highlight: 5, budget: m.limit, labels: histLabels, colorFor: v => (v > m.limit ? "var(--purple)" : "var(--accent)") })));
+
+  set("[data-models]", MODELS.map(([name, share]) =>
+    `<div class="m"><span>${name}</span><span class="muted" style="text-align:right">${fmt(m.used * share)}</span>
+     <div class="bar"><div class="fill" style="width:${share * 100}%;background:var(--accent)"></div></div></div>`).join(""));
+
+  set("[data-native-tip]", `Cursor Enterprise: ${Math.round(f * 100)}% of included used\n${fmt(m.used)} of ${fmt(m.limit)} · resets in ${Math.ceil(m.daysLeft)} days\nToday ${fmt(m.today)} · on pace for ~${Math.round(m.proj * 100)}%`);
+  set("[data-ctx-head]", `Cursor · ${Math.round(f * 100)}% of included (${fmt(m.used)} / ${fmt(m.limit)})`);
+  set("[data-ctx-today]", `Today: ${fmt(m.today)}   Yesterday: ${fmt(m.yesterday)}`);
+  set("[data-ctx-avg]", `7-day avg: ${fmt(m.avg7)}/day`);
+  set("[data-ctx-proj]", `Projected: ~${Math.round(m.proj * 100)}% by ${short(cycleEnd)}`);
+  document.querySelectorAll("[data-tray16],[data-tray24]").forEach(c => drawTrayIcon(c, f, m.elapsedF));
+  document.getElementById("usedv").textContent = Math.round(f * 100) + "%";
+}
+
+document.getElementById("theme").onchange = e => { document.body.className = e.target.value; render(); };
+document.getElementById("used").oninput = e => { S.used = e.target.value / 100; render(); };
+document.getElementById("units").onchange = e => { S.units = e.target.value; render(); };
+document.querySelectorAll("[data-seg] button").forEach(b => b.onclick = () => {
+  const root = b.closest(".flyout");
+  root.querySelectorAll("[data-seg] button").forEach(x => x.classList.toggle("on", x === b));
+  root.querySelectorAll("[data-pane]").forEach(p => p.classList.toggle("on", p.dataset.pane === b.dataset.tab));
+});
+render();
+</script>
+</body>
+</html>
