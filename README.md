@@ -2,6 +2,8 @@
 
 **Keep track of your AI.**
 
+Licensed under the [MIT License](LICENSE).
+
 TokenKeeper lives in your system tray and monitors subscription allowances across
 **Cursor, GitHub Copilot, Claude Code, ChatGPT Codex and OpenCode Go**. Check what you have used,
 when your limits reset, and whether your current pace will last the cycle.
