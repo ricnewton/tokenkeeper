@@ -1,0 +1,90 @@
+name: Build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux x64
+            os: ubuntu-24.04
+            target: x86_64-unknown-linux-gnu
+            binary: tokenkeeper
+            archive: tokenkeeper-linux-x86_64.tar.gz
+          - name: Windows x64
+            os: windows-2022
+            target: x86_64-pc-windows-msvc
+            binary: tokenkeeper.exe
+            archive: tokenkeeper-windows-x86_64.zip
+    defaults:
+      run:
+        shell: bash
+    env:
+      RUSTFLAGS: -Dwarnings
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Linux runtime libraries
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y \
+            libgtk-3-0t64 libdbusmenu-gtk3-4 libdbusmenu-glib4 \
+            libcairo2 libsecret-1-0 libssl3t64 curl xdg-utils
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f
+        with:
+          toolchain: 1.99.0
+          targets: ${{ matrix.target }}
+
+      - name: Run tests
+        run: cargo test --release --locked --target "${{ matrix.target }}"
+
+      - name: Build release
+        run: cargo build --release --locked --target "${{ matrix.target }}"
+
+      - name: Prepare download
+        run: |
+          mkdir -p dist/package
+          cp "target/${{ matrix.target }}/release/${{ matrix.binary }}" dist/package/
+          cp LICENSE README.md dist/package/
+          cp docs/howto/setup.md dist/package/INSTALL.md
+
+      - name: Archive Linux build
+        if: runner.os == 'Linux'
+        run: tar -czf "dist/${{ matrix.archive }}" -C dist/package .
+
+      - name: Archive Windows build
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Compress-Archive -Path dist/package/* -DestinationPath "dist/${{ matrix.archive }}"
+
+      - name: Upload download
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ matrix.target }}
+          path: dist/${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 7

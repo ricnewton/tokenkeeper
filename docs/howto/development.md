@@ -37,3 +37,23 @@ RUSTFLAGS=-Dwarnings cargo check --locked --target x86_64-pc-windows-gnu
 A cross-check verifies compilation; test tray interactions on Windows itself.
 Quit the running Windows copy before rebuilding because Windows locks the executable.
 See [deployment](../design/deployment.md) for installation and update steps.
+
+## GitHub Actions
+
+The **Build and test** workflow runs on pushes to `main`, pull requests and
+manual dispatch. A single workflow has two jobs from a matrix: Ubuntu 24.04
+and Windows Server 2022. Both run warning-free release tests and builds using
+Rust 1.99.0. Windows builds natively with MSVC so its tests actually run;
+the local GNU cross-check above is an additional compilation check.
+
+Open a successful run in the repository's **Actions** tab and download
+`x86_64-unknown-linux-gnu` or `x86_64-pc-windows-msvc`. Inside the downloaded
+artifact is a platform archive containing the executable, README, installation
+instructions and MIT license. Artifacts expire after seven days. Linux builds
+require the desktop runtime libraries listed in the installation instructions;
+they are not static binaries. Windows binaries are unsigned.
+
+The jobs run without supplier credentials or interactive sign-in. Unit tests
+and builds do not validate live account access or tray behavior; those still
+need desktop testing. The workflow needs only repository read permission and
+works with a private repository on GitHub Free, within its included allowance.

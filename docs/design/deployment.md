@@ -58,7 +58,7 @@ The product and executable are now named TokenKeeper (`tokenkeeper.exe` / `token
   - an app icon (the ring);
   - optionally, a manifest. DPI awareness is already set in code (`SetProcessDpiAwarenessContext` per-monitor v2 in `main.rs`), but a manifest is the recommended way.
 - [x] **License:** MIT, recorded in `LICENSE`, the README and Cargo package metadata.
-- [ ] **CI:** GitHub Actions jobs on Windows and Linux running tests and release builds, then uploading unsigned binaries as artifacts. Linux runners need the desktop runtime libraries from the setup guide. No account credentials or signing secrets are needed for these build jobs. Pin the toolchain with a `rust-toolchain.toml` (developed on Rust 1.99).
+- [x] **CI:** `.github/workflows/build.yml` runs native Windows/MSVC and Linux builds and tests, then uploads unsigned binaries with the MIT license and installation instructions. Toolchain: Rust 1.99.0, pinned in `rust-toolchain.toml`. No account credentials or signing secrets are needed. See the development guide for triggers and downloads.
 - [x] **User README:** what the app does, how to run it, where data lives (`%APPDATA%\ai-usage`), how to remove it (quit, untick "Autostart", delete the folder), and a privacy note. Tokens are DPAPI-encrypted and stay on the machine, and Copilot and Claude use minimal scopes (`read:user`, `user:profile`); ChatGPT credentials must not be described as read-only.
 - [ ] **Update path:** there's none yet. The simplest option is a "new version available" check against GitHub Releases, or just documenting how to replace the exe in place.
   - For now, replace the installed executable in place. Autostart re-points itself at whichever copy runs (see "Installing and updating").
