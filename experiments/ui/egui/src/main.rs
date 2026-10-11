@@ -1,13 +1,8 @@
-#[path = "../../shared/fixture.rs"]
-mod fixture;
-
-use eframe::egui::{self, Align, Color32, Layout, RichText, Stroke, Vec2};
-use fixture::{Provider, DAYS, PROVIDERS};
+use eframe::egui::{self, Color32, Stroke, Vec2};
 use std::time::{Duration, Instant};
 
 struct App {
     selected: usize,
-    tab: usize,
     dark: bool,
     popup: bool,
     had_focus: bool,
@@ -30,8 +25,7 @@ impl App {
             egui::Visuals::light()
         });
         Self {
-            selected: 0,
-            tab: 0,
+            selected: 1,
             dark,
             popup,
             had_focus: false,
@@ -41,126 +35,294 @@ impl App {
         }
     }
 
-    fn panel(&mut self, ui: &mut egui::Ui, p: Provider) {
-        ui.horizontal(|ui| {
-            ui.vertical(|ui| {
-                ui.label(
-                    RichText::new("THIS CYCLE")
-                        .size(11.0)
-                        .strong()
-                        .color(Color32::from_gray(145)),
-                );
-                ui.add_space(7.0);
-                ui.label(RichText::new(p.used).size(31.0).strong());
-                ui.label(
-                    RichText::new(format!("of {} · resets in 12 days", p.limit))
-                        .size(12.0)
-                        .color(Color32::from_gray(150)),
-                );
-            });
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let (rect, _) = ui.allocate_exact_size(Vec2::splat(102.0), egui::Sense::hover());
-                let painter = ui.painter_at(rect);
-                let center = rect.center();
-                let radius = 39.0;
-                painter.circle_stroke(center, radius, Stroke::new(9.0_f32, Color32::from_gray(55)));
-                let sweep = std::f32::consts::TAU * p.percent as f32 / 100.0;
-                let points = (0..=48)
-                    .map(|i| {
-                        let angle = -std::f32::consts::FRAC_PI_2 + sweep * i as f32 / 48.0;
-                        center + Vec2::new(angle.cos(), angle.sin()) * radius
-                    })
-                    .collect::<Vec<_>>();
-                painter.add(egui::Shape::line(
-                    points,
-                    Stroke::new(
-                        9.0_f32,
-                        Color32::from_rgb(p.color[0], p.color[1], p.color[2]),
-                    ),
-                ));
-                painter.text(
-                    center,
-                    egui::Align2::CENTER_CENTER,
-                    format!("{}%", p.percent),
-                    egui::FontId::proportional(20.0),
-                    ui.visuals().text_color(),
-                );
-            });
-        });
-        ui.add_space(22.0);
-        ui.horizontal(|ui| {
-            ui.label(RichText::new("Usage limit").strong());
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(format!("{}%", p.percent)).color(Color32::from_gray(150)));
-            });
-        });
-        ui.add_space(8.0);
-        let mut bar = egui::ProgressBar::new(p.percent as f32 / 100.0)
-            .desired_height(8.0)
-            .fill(Color32::from_rgb(p.color[0], p.color[1], p.color[2]));
-        bar = bar.show_percentage();
-        ui.add(bar);
-        ui.add_space(24.0);
-        ui.horizontal(|ui| {
-            ui.label(
-                RichText::new(match self.tab {
-                    0 => "Recent activity",
-                    1 => "Cycle activity",
-                    _ => "Usage history",
-                })
-                .strong(),
-            );
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(
-                    RichText::new("Last 12 days")
-                        .size(11.0)
-                        .color(Color32::from_gray(145)),
-                );
-            });
-        });
-        ui.add_space(10.0);
-        let (rect, _) =
-            ui.allocate_exact_size(Vec2::new(ui.available_width(), 132.0), egui::Sense::hover());
-        let painter = ui.painter_at(rect);
-        for row in 0..4 {
-            let y = rect.top() + row as f32 * 31.0 + 8.0;
-            painter.line_segment(
-                [egui::pos2(rect.left(), y), egui::pos2(rect.right(), y)],
-                Stroke::new(1.0_f32, Color32::from_gray(55)),
-            );
-        }
-        let gap = rect.width() / DAYS.len() as f32;
-        for (i, value) in DAYS.iter().enumerate() {
-            let height = *value as f32 / 100.0 * 92.0;
-            let x = rect.left() + i as f32 * gap + gap * 0.22;
-            let bar = egui::Rect::from_min_size(
-                egui::pos2(x, rect.bottom() - height - 18.0),
-                Vec2::new(gap * 0.56, height),
-            );
-            painter.rect_filled(
-                bar,
-                3.0,
-                Color32::from_rgb(p.color[0], p.color[1], p.color[2]),
-            );
-        }
-        ui.add_space(4.0);
-        ui.horizontal(|ui| {
-            for label in ["1", "3", "5", "7", "9", "11"] {
-                ui.add_sized(
-                    Vec2::new(ui.available_width() / 6.0, 14.0),
-                    egui::Label::new(
-                        RichText::new(label)
-                            .size(10.0)
-                            .color(Color32::from_gray(130)),
-                    ),
-                );
+    fn panel(&mut self, ui: &mut egui::Ui) {
+        let origin = ui.max_rect().min;
+        let scale = (ui.max_rect().width() / 440.0).min(ui.max_rect().height() / 606.0);
+        let rect = |x: f32, y: f32, w: f32, h: f32| {
+            egui::Rect::from_min_size(origin + Vec2::new(x, y) * scale, Vec2::new(w, h) * scale)
+        };
+        let fg = if self.dark {
+            Color32::from_gray(239)
+        } else {
+            Color32::from_gray(35)
+        };
+        let secondary = if self.dark {
+            Color32::from_gray(178)
+        } else {
+            Color32::from_gray(85)
+        };
+        let muted = if self.dark {
+            Color32::from_gray(133)
+        } else {
+            Color32::from_gray(105)
+        };
+        let card = if self.dark {
+            Color32::from_gray(49)
+        } else {
+            Color32::from_gray(226)
+        };
+        let selected = if self.dark {
+            Color32::from_gray(62)
+        } else {
+            Color32::from_gray(207)
+        };
+        let track = if self.dark {
+            Color32::from_gray(55)
+        } else {
+            Color32::from_gray(203)
+        };
+        let green = Color32::from_rgb(51, 202, 122);
+        let cyan = if self.dark {
+            Color32::from_rgb(49, 205, 238)
+        } else {
+            Color32::from_rgb(0, 113, 148)
+        };
+        let data = [
+            (
+                "Cursor",
+                "Cursor",
+                "pro · Monthly",
+                6,
+                "of the monthly limit",
+                "On pace for ~67%",
+                "Monthly",
+            ),
+            (
+                "Codex",
+                "ChatGPT Codex",
+                "pro · Weekly",
+                33,
+                "of the 7-day limit",
+                "On pace for ~368% (over)",
+                "Weekly",
+            ),
+            (
+                "OpenCode",
+                "OpenCode Go",
+                "Go · Weekly",
+                0,
+                "of the weekly limit",
+                "On pace for ~0%",
+                "Weekly",
+            ),
+        ];
+        for (index, provider) in data.iter().enumerate() {
+            let x = 4.0 + index as f32 * 147.0;
+            let bounds = rect(x, 5.0, 139.0, 92.0);
+            let response = ui.interact(bounds, ui.id().with(index), egui::Sense::click());
+            if response.clicked() {
+                self.selected = index;
             }
+            ui.painter().rect_filled(
+                bounds,
+                9.0 * scale,
+                if self.selected == index {
+                    selected
+                } else {
+                    card
+                },
+            );
+            label(
+                ui.painter(),
+                origin,
+                scale,
+                x + 9.0,
+                21.0,
+                provider.0,
+                13.0,
+                secondary,
+            );
+            ring(
+                ui.painter(),
+                origin + Vec2::new(x + 31.0, 61.0) * scale,
+                17.0 * scale,
+                5.0 * scale,
+                provider.3 as f32 / 100.0,
+                [0.4, 0.09, 0.0][index],
+                track,
+                green,
+            );
+            label(
+                ui.painter(),
+                origin,
+                scale,
+                x + 56.0,
+                61.0,
+                &format!("{}%", provider.3),
+                13.0,
+                fg,
+            );
+            if self.selected == index {
+                ui.painter()
+                    .rect_filled(rect(x + 62.0, 97.0, 14.0, 3.0), 2.0 * scale, secondary);
+            }
+        }
+        let scroll: f32 = ui.input(|input| {
+            input
+                .raw
+                .events
+                .iter()
+                .filter_map(|event| match event {
+                    egui::Event::MouseWheel { delta, .. } => Some(delta.y),
+                    _ => None,
+                })
+                .sum()
         });
-        ui.add_space(18.0);
-        ui.label(
-            RichText::new("All values are sample data")
-                .size(11.0)
-                .color(Color32::from_gray(130)),
+        if scroll.abs() > 0.0 {
+            self.selected =
+                (self.selected as isize + if scroll < 0.0 { 1 } else { -1 }).rem_euclid(3) as usize;
+        }
+        let p = data[self.selected];
+        label(ui.painter(), origin, scale, 23.0, 132.0, p.1, 17.0, fg);
+        ui.painter()
+            .rect_filled(rect(253.0, 116.0, 100.0, 27.0), 14.0 * scale, track);
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            263.0,
+            130.0,
+            p.2,
+            10.0,
+            secondary,
+        );
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            362.0,
+            132.0,
+            "Usage >",
+            12.0,
+            cyan,
+        );
+        let center = origin + Vec2::new(76.0, 205.0) * scale;
+        ring(
+            ui.painter(),
+            center,
+            43.0 * scale,
+            5.0 * scale,
+            p.3 as f32 / 100.0,
+            [0.4, 0.09, 0.0][self.selected],
+            track,
+            green,
+        );
+        ui.painter().text(
+            center,
+            egui::Align2::CENTER_CENTER,
+            format!("{}%", p.3),
+            egui::FontId::proportional(17.0 * scale),
+            fg,
+        );
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            146.0,
+            176.0,
+            &format!("{}%", p.3),
+            28.0,
+            fg,
+        );
+        label(ui.painter(), origin, scale, 146.0, 202.0, p.4, 13.0, muted);
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            146.0,
+            228.0,
+            p.5,
+            13.0,
+            secondary,
+        );
+        ui.painter().rect_filled(
+            rect(23.0, 332.0, 396.0, 35.0),
+            7.0 * scale,
+            if self.dark {
+                Color32::from_gray(67)
+            } else {
+                Color32::from_gray(209)
+            },
+        );
+        label(ui.painter(), origin, scale, 39.0, 351.0, "Limits", 13.0, fg);
+        ui.painter().rect_filled(
+            rect(23.0, 381.0, 396.0, 171.0),
+            7.0 * scale,
+            if self.dark {
+                Color32::from_gray(44)
+            } else {
+                Color32::from_gray(235)
+            },
+        );
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            36.0,
+            403.0,
+            "Rate limits",
+            13.0,
+            fg,
+        );
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            36.0,
+            428.0,
+            p.6,
+            13.0,
+            secondary,
+        );
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            251.0,
+            428.0,
+            "resets 18 Oct",
+            10.0,
+            muted,
+        );
+        ui.painter().text(
+            origin + Vec2::new(395.0, 428.0) * scale,
+            egui::Align2::RIGHT_CENTER,
+            format!("{}%", p.3),
+            egui::FontId::proportional(12.0 * scale),
+            fg,
+        );
+        ui.painter().rect_filled(
+            rect(36.0, 439.0, 365.0, 8.0),
+            4.0 * scale,
+            if self.dark {
+                Color32::from_gray(71)
+            } else {
+                Color32::from_gray(197)
+            },
+        );
+        if p.3 > 0 {
+            ui.painter().rect_filled(
+                rect(36.0, 439.0, 365.0 * p.3 as f32 / 100.0, 8.0),
+                0.0,
+                green,
+            );
+        }
+        label(
+            ui.painter(),
+            origin,
+            scale,
+            23.0,
+            583.0,
+            "Resets 18 Oct (7 days)",
+            11.0,
+            muted,
+        );
+        ui.painter().text(
+            origin + Vec2::new(415.0, 583.0) * scale,
+            egui::Align2::RIGHT_CENTER,
+            "Updated 3 min ago",
+            egui::FontId::proportional(11.0 * scale),
+            muted,
         );
     }
 }
@@ -220,51 +382,12 @@ impl eframe::App for App {
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         egui::CentralPanel::default()
-            .frame(egui::Frame::central_panel(ui.style()).inner_margin(24))
-            .show(ui, |ui| {
-                ui.horizontal(|ui| {
-                    ui.label(RichText::new("Usage").size(20.0).strong());
-                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                        if ui
-                            .button(if self.dark { "Light" } else { "Dark" })
-                            .on_hover_text("Toggle theme")
-                            .clicked()
-                        {
-                            self.dark = !self.dark;
-                            ctx.set_visuals(if self.dark {
-                                egui::Visuals::dark()
-                            } else {
-                                egui::Visuals::light()
-                            });
-                        }
-                        ui.label(
-                            RichText::new("All systems normal")
-                                .size(11.0)
-                                .color(Color32::from_rgb(103, 213, 163)),
-                        );
-                    });
-                });
-                ui.add_space(18.0);
-                egui::ComboBox::from_id_salt("provider")
-                    .selected_text(PROVIDERS[self.selected].name)
-                    .width(ui.available_width())
-                    .show_ui(ui, |ui| {
-                        for (i, p) in PROVIDERS.iter().enumerate() {
-                            ui.selectable_value(&mut self.selected, i, p.name);
-                        }
-                    });
-                ui.add_space(12.0);
-                ui.horizontal(|ui| {
-                    for (i, tab) in ["Limits", "This cycle", "History"].iter().enumerate() {
-                        if ui.selectable_label(self.tab == i, *tab).clicked() {
-                            self.tab = i;
-                        }
-                    }
-                });
-                ui.separator();
-                egui::ScrollArea::vertical()
-                    .show(ui, |ui| self.panel(ui, PROVIDERS[self.selected]));
-            });
+            .frame(egui::Frame::NONE.fill(if self.dark {
+                Color32::from_gray(40)
+            } else {
+                Color32::from_gray(246)
+            }))
+            .show(ui, |ui| self.panel(ui));
         if ctx.input(|i| i.viewport().focused == Some(true)) {
             self.had_focus = true;
         }
@@ -298,10 +421,10 @@ fn main() -> eframe::Result<()> {
     }
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([440.0, 600.0])
+            .with_inner_size([440.0, 606.0])
             .with_resizable(false)
             .with_title("Usage · egui prototype")
-            .with_decorations(!popup),
+            .with_decorations(false),
         ..Default::default()
     };
     eframe::run_native(
@@ -326,4 +449,55 @@ fn save_png(
     encoder.set_depth(png::BitDepth::Eight);
     encoder.write_header()?.write_image_data(pixels)?;
     Ok(())
+}
+
+fn label(
+    painter: &egui::Painter,
+    origin: egui::Pos2,
+    scale: f32,
+    x: f32,
+    y: f32,
+    text: &str,
+    size: f32,
+    color: Color32,
+) {
+    painter.text(
+        origin + Vec2::new(x, y) * scale,
+        egui::Align2::LEFT_CENTER,
+        text,
+        egui::FontId::proportional(size * scale),
+        color,
+    );
+}
+
+fn ring(
+    painter: &egui::Painter,
+    center: egui::Pos2,
+    radius: f32,
+    width: f32,
+    fraction: f32,
+    elapsed: f32,
+    track: Color32,
+    green: Color32,
+) {
+    painter.circle_stroke(center, radius, Stroke::new(width, track));
+    if fraction > 0.0 {
+        let points = (0..=48)
+            .map(|step| {
+                let angle = -std::f32::consts::FRAC_PI_2
+                    + std::f32::consts::TAU * fraction * step as f32 / 48.0;
+                center + Vec2::new(angle.cos(), angle.sin()) * radius
+            })
+            .collect::<Vec<_>>();
+        painter.add(egui::Shape::line(points, Stroke::new(width, green)));
+    }
+    let angle = -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * elapsed;
+    let direction = Vec2::new(angle.cos(), angle.sin());
+    painter.line_segment(
+        [
+            center + direction * (radius - width),
+            center + direction * (radius + 1.0),
+        ],
+        Stroke::new(1.5, Color32::from_gray(225)),
+    );
 }

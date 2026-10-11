@@ -1,20 +1,20 @@
 # GPUI prototype
 
-This credential-free prototype pins the published `gpui` 0.2.2 crate. It shares the app-owned fixture in `../shared/fixture.rs` with the egui and Iced prototypes. It has no provider, wallet, tray, autostart, or network code.
+This credential-free prototype pins the published `gpui` 0.2.2 crate. Account names come from `../shared/fixture.rs`; the three-card percentages match the supplied GTK3 reference. It has no provider, wallet, tray, autostart, or network code.
 
 ```sh
-CARGO_TARGET_DIR="$PWD/.local/ui-build" cargo run --manifest-path experiments/ui/gpui/Cargo.toml
-CARGO_TARGET_DIR="$PWD/.local/ui-build" cargo run --manifest-path experiments/ui/gpui/Cargo.toml -- --auto-close 3
+CARGO_TARGET_DIR="$PWD/.local/ui-build" cargo run --release --locked --manifest-path experiments/ui/gpui/Cargo.toml
+CARGO_TARGET_DIR="$PWD/.local/ui-build" cargo run --release --locked --manifest-path experiments/ui/gpui/Cargo.toml -- --auto-close 3
 ```
 
-The window is 440×600. `--light` selects the light theme and `--auto-close SECONDS` bounds a smoke run. Escape closes the application. GPUI 0.2.2 does not expose a portable window screenshot API; its Wayland platform source also says screen capture is not implemented, so this prototype does not implement `--screenshot`.
+The borderless window is 440×606, with custom Cursor, Codex and OpenCode account cards matching the GTK3 reference. Clicking cards or scrolling switches the sample account. `--light` selects the light theme and `--auto-close SECONDS` bounds a smoke run. Escape closes the application. GPUI 0.2.2 does not expose a portable window screenshot API; its Wayland platform source also says screen capture is not implemented, so this prototype does not implement `--screenshot`.
 
 ## Initial hypotheses and limitations
 
 - GPUI's retained element model and native window controls may suit an app-owned panel, but this comparison uses the published API, not newer Git-main popup APIs.
 - The 0.2.2 default feature set enables both X11 and Wayland. It uses Blade GPU rendering and includes native font and clipboard integrations; Linux runtime/build requirements may exceed the other prototypes and need desktop verification.
 - GPUI 0.2.2 pulls `xattr` 0.2.3 through its HTTP archive helper; that release references `libc::ENOATTR` on Linux, where libc exposes the equivalent `ENODATA`. A small local patch applies that platform alias for this standalone prototype.
-- The ring uses a custom GPUI canvas stroke for the sample percentage; the bar and chart use retained elements. This is a layout and interaction comparison, not a tray integration claim.
+- The ring uses a custom GPUI canvas stroke for the sample percentage; the cards and limit bar use retained elements. This is a layout and interaction comparison, not a tray integration claim.
 - Ordinary Wayland toplevel placement remains compositor controlled. The app has no Plasma tray surface to parent a GPUI popup to.
 
 ## Build requirements and evidence
@@ -31,7 +31,7 @@ The experiment was built without installing packages: local symlinks under
 link search path. This directory is ignored and is not distributed.
 
 Locked release builds and native Wayland/XWayland runs passed. XWayland Escape
-passed. App-window previews were captured with ffmpeg X11 window capture, without
+passed. The final card hit-handling revision still needs interactive confirmation. App-window previews were captured with ffmpeg X11 window capture, without
 capturing the rest of the desktop. Native Wayland image capture, focus-loss
 popup behavior, tray positioning and Windows execution remain unverified.
 Cargo reports a future-compatibility issue in transitive `proc-macro-error2` 2.0.1,

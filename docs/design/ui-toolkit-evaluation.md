@@ -8,13 +8,17 @@ Replacing the popup is a separate change.
 ## Working comparisons
 
 Credential-free experiments are in [experiments/ui](../../experiments/ui/README.md).
-They use the same five-provider sample fixture, a 440×600 window, themes,
-selection, tabs, charts and Escape. They do not read accounts or contact providers.
-GTK3 uses the existing production demo (different sample amounts, same 42%
-Cursor usage). The alternatives use the shared fixture. The fixed window size
-keeps alternative screenshots comparable; responsive layout is not
-being evaluated yet. Tabs change the chart heading, not a complete production
-history implementation.
+The latest comparison reproduces the supplied borderless GTK3 reference at
+440×606: three account cards (Cursor 6%, Codex 33%, OpenCode 0%), selection marker,
+usage rings, plan badge, Limits view, progress bar and footer. All three use custom
+cards, without standard provider buttons, dropdowns or scrollbars. Dark/light
+previews were inspected; small font-rendering differences remain.
+
+The reference is the user's GTK3 screenshot; it is not a fresh GTK3 benchmark.
+The alternatives use fixed demonstration data. Only the Limits view is mocked;
+provider-specific history, sign-in and refresh are not implemented. “Usage >” is
+decorative. Clicking cards changes the sample account, and scrolling cycles cards.
+These isolated experiments do not access credentials or contact providers.
 
 - **egui/eframe 0.36.2:** custom painter for the ring/chart; OpenGL through glow.
 - **Iced 0.14:** message/update model, custom canvas ring and tiny-skia software
@@ -37,19 +41,23 @@ also needs OpenGL, while Iced's selected renderer uses the CPU.
 | Prototype | Release executable | Idle RSS | Idle CPU (one core) |
 | --- | ---: | ---: | ---: |
 | GTK3/Cairo production demo | 3.4 MiB | 34.6 MiB | 0.00% |
-| egui/glow | 15.7 MiB | 93.8 MiB | 0.00% |
-| Iced/tiny-skia | 11.8 MiB | 14.3 MiB | 0.00% |
-| GPUI/Blade | 23.8 MiB | 83.0 MiB | 0.33% |
+| egui/glow | 15.7 MiB | 92.0 MiB | 0.00% |
+| Iced/tiny-skia | 11.8 MiB | 14.2 MiB | 0.00% |
+| GPUI/Blade | 23.8 MiB | 77.3 MiB | 0.33% |
 
-RSS was sampled after two seconds; CPU was sampled for the following three
+The alternatives were remeasured with the three-card layout; the GTK3 result is
+the earlier production-demo baseline with different sample content. RSS was sampled after two seconds; CPU was sampled for the following three
 seconds, without auto-close timers or interaction. GTK3 was the complete app in isolated demo mode, with the popup shown; the other
 measurements are standalone panels. GTK3 dynamically links the installed toolkit,
 while more code is bundled into the alternatives. These are short local samples,
-not a portable benchmark or long-term power measurement. All three rendered on
-native Wayland and XWayland. Light/dark images were inspected. XWayland Escape
-passed for all three, and focus-loss dismissal passed for egui/Iced after guarding
-against the initial unfocused creation event. GPUI has no focus-loss mode in this
-experiment. Ordinary-window activation is not proof of activation from a tray.
+not a portable benchmark or long-term power measurement. All three rendered on native Wayland and XWayland with the new layout. Light/dark
+images were inspected. XWayland Escape passed for all three; egui/Iced card
+switching and wheel cycling passed. GPUI's desktop card selection check did not
+switch the account; its input handling was changed to hit-test the card rectangles
+at the root. That final revision still needs an interactive check. Earlier
+focus-loss dismissal passed for egui/Iced; it is opt-in with `--popup` to permit
+comparison of several open demos. GPUI has no focus-loss mode. Ordinary-window
+activation is not proof of activation from a tray.
 
 GPUI required XCB/XKB development link names and a vendored xattr 0.2.3 Linux
 compatibility patch; its 708-package resolved graph and Vulkan rendering introduce
@@ -57,13 +65,12 @@ more build/platform complexity. Runtime sonames were already installed; no syste
 packages were installed for the experiment. Cargo reports a future-compatibility
 issue in proc-macro-error2 2.0.1. Details are in its experiment README.
 
-**User preference:** GPUI's panel looks nicest; Iced is also good, but its initial
-scrollbar/overflow needed correction. GPUI is the preferred visual style; the next work requested is improving Iced
-and comparing it directly with GTK3 and GPUI.
-Iced is the leading resource-use candidate. The production decision should weigh
-that visual preference against GPUI's extra build/runtime requirements and verify
-tray activation/placement before migration. The Iced comparison was subsequently
-compacted to fit the entire fixed-size panel without overflow.
+**User preference:** GPUI looked nicest in the initial comparison, but preserving
+the existing borderless three-card UI is required. All three now reproduce that
+layout, so standard widget appearance is no longer a deciding factor. Iced is the
+leading resource-use candidate. Selection should weigh font/rendering quality and
+build/runtime requirements, then verify real tray activation and placement before
+migration. Production continues to use GTK3.
 
 Stage 1 verification: 48 release tests passed, with two separately passing live
 integration checks (browser portal and isolated wallet create/read/replace/delete).

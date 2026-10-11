@@ -1,18 +1,11 @@
-#[path = "../../shared/fixture.rs"]
-mod fixture;
-
-use fixture::{Provider, DAYS, PROVIDERS};
-use iced::widget::{
-    button, column, container, pick_list, progress_bar, row, scrollable, text, Column, Row,
-};
-use iced::{Alignment, Background, Border, Color, Element, Length, Size, Theme};
+use iced::widget::canvas::{self, Frame, Geometry, Path, Stroke, Text};
+use iced::{Color, Element, Length, Point, Rectangle, Size, Theme};
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Clone)]
 enum Message {
-    Provider(Provider),
-    Tab(usize),
-    ToggleTheme,
+    Provider(usize),
+    Cycle(i32),
     Tick,
     Screenshot(iced::window::Screenshot),
     Latest(Option<iced::window::Id>),
@@ -22,8 +15,7 @@ enum Message {
 }
 
 struct App {
-    selected: Provider,
-    tab: usize,
+    selected: usize,
     dark: bool,
     close_at: Option<Instant>,
     screenshot: Option<std::path::PathBuf>,
@@ -35,8 +27,7 @@ struct App {
 impl Default for App {
     fn default() -> Self {
         Self {
-            selected: PROVIDERS[0],
-            tab: 0,
+            selected: 1,
             dark: true,
             close_at: None,
             screenshot: None,
@@ -51,8 +42,9 @@ impl App {
     fn update(&mut self, message: Message) -> iced::Task<Message> {
         match message {
             Message::Provider(p) => self.selected = p,
-            Message::Tab(tab) => self.tab = tab,
-            Message::ToggleTheme => self.dark = !self.dark,
+            Message::Cycle(step) => {
+                self.selected = (self.selected as i32 + step).rem_euclid(3) as usize
+            }
             Message::Tick => {
                 if self.close_at.is_some_and(|t| Instant::now() >= t) {
                     return iced::exit();
@@ -92,139 +84,13 @@ impl App {
     }
 
     fn view(&self) -> Element<'_, Message, Theme> {
-        let title = row![
-            text("Usage").size(21).font(iced::Font::DEFAULT),
-            iced::widget::Space::new().width(Length::Fill),
-            text("All systems normal")
-                .size(11)
-                .color(Color::from_rgb(0.40, 0.84, 0.64)),
-            button(text(if self.dark { "Light" } else { "Dark" }))
-                .on_press(Message::ToggleTheme)
-                .padding([5, 9])
-        ]
-        .align_y(Alignment::Center)
-        .spacing(9);
-        let choices = PROVIDERS.to_vec();
-        let provider = pick_list(choices, Some(self.selected), Message::Provider)
-            .placeholder("Choose provider")
-            .width(Length::Fill);
-        let mut tabs = Row::new().spacing(8);
-        for (i, label) in ["Limits", "This cycle", "History"].iter().enumerate() {
-            let active = self.tab == i;
-            tabs = tabs.push(
-                button(
-                    text(if active {
-                        format!("● {label}")
-                    } else {
-                        (*label).to_string()
-                    })
-                    .size(13),
-                )
-                .on_press(Message::Tab(i))
-                .padding([8, 12]),
-            );
-        }
-        let p = self.selected;
-        let rgb = Color::from_rgb8(p.color[0], p.color[1], p.color[2]);
-        let summary = row![
-            column![
-                text("THIS CYCLE")
-                    .size(11)
-                    .color(Color::from_rgb(0.56, 0.57, 0.61)),
-                text(p.used).size(31),
-                text(format!("of {} · resets in 12 days", p.limit))
-                    .size(12)
-                    .color(Color::from_rgb(0.56, 0.57, 0.61))
-            ]
-            .spacing(7),
-            iced::widget::Space::new().width(Length::Fill),
-            iced::widget::canvas(Ring {
-                percent: p.percent,
-                color: rgb
-            })
-            .width(92)
-            .height(92)
-        ]
-        .align_y(Alignment::Center)
-        .spacing(12)
-        .padding([0, 0]);
-        let usage = column![
-            row![
-                text("Usage limit").size(14),
-                iced::widget::Space::new().width(Length::Fill),
-                text(format!("{}%", p.percent))
-                    .size(12)
-                    .color(Color::from_rgb(0.56, 0.57, 0.61))
-            ]
-            .align_y(Alignment::Center),
-            progress_bar(0.0..=100.0, p.percent as f32).girth(8)
-        ]
-        .spacing(10);
-        let mut chart = Row::new()
-            .spacing(6)
-            .align_y(Alignment::End)
-            .height(Length::Fixed(100.0));
-        for value in DAYS {
-            let bar = container(
-                iced::widget::Space::new()
-                    .height(Length::Fixed(value as f32 * 0.9))
-                    .width(Length::Fill),
-            )
-            .style(move |_| container::Style {
-                background: Some(Background::Color(rgb)),
-                border: Border::default().rounded(3),
-                ..container::Style::default()
-            });
-            chart = chart.push(
-                container(bar)
-                    .width(Length::Fill)
-                    .height(Length::Fill)
-                    .align_y(iced::alignment::Vertical::Bottom),
-            );
-        }
-        let activity = column![
-            row![
-                text(match self.tab {
-                    0 => "Recent activity",
-                    1 => "Cycle activity",
-                    _ => "Usage history",
-                })
-                .size(14),
-                iced::widget::Space::new().width(Length::Fill),
-                text("Last 12 days")
-                    .size(11)
-                    .color(Color::from_rgb(0.56, 0.57, 0.61))
-            ]
-            .align_y(Alignment::Center),
-            chart,
-            row![
-                text("1          3          5          7          9         11")
-                    .size(10)
-                    .color(Color::from_rgb(0.56, 0.57, 0.61))
-            ]
-        ]
-        .spacing(12);
-        let body: Column<'_, Message> = column![
-            title,
-            provider,
-            tabs,
-            summary,
-            usage,
-            activity,
-            text("All values are sample data")
-                .size(11)
-                .color(Color::from_rgb(0.56, 0.57, 0.61))
-        ]
-        .spacing(12)
-        .width(376);
-        container(scrollable(body).height(Length::Fill).width(Length::Fill))
-            .width(Length::Fill)
-            .padding(20)
-            .style(|theme| container::Style {
-                background: Some(Background::Color(theme.palette().background)),
-                ..container::Style::default()
-            })
-            .into()
+        iced::widget::canvas(Panel {
+            selected: self.selected,
+            light: !self.dark,
+        })
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
     }
 }
 
@@ -271,10 +137,10 @@ pub fn main() -> iced::Result {
         }
     })
     .window(iced::window::Settings {
-        size: Size::new(440.0, 600.0),
+        size: Size::new(440.0, 606.0),
         ..iced::window::Settings::default()
     })
-    .decorations(!_popup)
+    .decorations(false)
     .resizable(false)
     .subscription(move |_state: &App| {
         let keyboard = iced::event::listen_with(|event, _status, _id| match event {
@@ -320,55 +186,279 @@ fn save_png(
     Ok(())
 }
 
-struct Ring {
-    percent: u8,
-    color: Color,
+const ACCOUNTS: [(&str, &str, u8, &str, &str, &str, &str, f32); 3] = [
+    (
+        "Cursor",
+        "Cursor",
+        6,
+        "pro · Monthly",
+        "of the monthly limit",
+        "On pace for ~67%",
+        "Monthly",
+        0.4,
+    ),
+    (
+        "Codex",
+        "ChatGPT Codex",
+        33,
+        "pro · Weekly",
+        "of the 7-day limit",
+        "On pace for ~368% (over)",
+        "Weekly",
+        0.09,
+    ),
+    (
+        "OpenCode",
+        "OpenCode Go",
+        0,
+        "Go · Weekly",
+        "of the weekly limit",
+        "On pace for ~0%",
+        "Weekly",
+        0.0,
+    ),
+];
+
+struct Panel {
+    selected: usize,
+    light: bool,
 }
-impl iced::widget::canvas::Program<Message> for Ring {
+impl canvas::Program<Message> for Panel {
     type State = ();
+    fn update(
+        &self,
+        _: &mut (),
+        event: &iced::Event,
+        bounds: Rectangle,
+        cursor: iced::mouse::Cursor,
+    ) -> Option<canvas::Action<Message>> {
+        let point = cursor.position_in(bounds)?;
+        match event {
+            iced::Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left))
+                if point.y >= 5.0 && point.y <= 97.0 =>
+            {
+                let index = (point.x / (440.0 / 3.0)).floor() as usize;
+                if index < 3
+                    && point.x >= index as f32 * (440.0 / 3.0) + 4.0
+                    && point.x <= (index + 1) as f32 * (440.0 / 3.0) - 4.0
+                {
+                    return Some(canvas::Action::publish(Message::Provider(index)).and_capture());
+                }
+            }
+            iced::Event::Mouse(iced::mouse::Event::WheelScrolled { delta }) => {
+                let y = match delta {
+                    iced::mouse::ScrollDelta::Lines { y, .. }
+                    | iced::mouse::ScrollDelta::Pixels { y, .. } => *y,
+                };
+                if y != 0.0 {
+                    return Some(
+                        canvas::Action::publish(Message::Cycle(if y > 0.0 { -1 } else { 1 }))
+                            .and_capture(),
+                    );
+                }
+            }
+            _ => {}
+        }
+        None
+    }
+    fn mouse_interaction(
+        &self,
+        _: &(),
+        bounds: Rectangle,
+        cursor: iced::mouse::Cursor,
+    ) -> iced::mouse::Interaction {
+        if cursor
+            .position_in(bounds)
+            .is_some_and(|p| p.y >= 5.0 && p.y <= 97.0)
+        {
+            iced::mouse::Interaction::Pointer
+        } else {
+            iced::mouse::Interaction::default()
+        }
+    }
     fn draw(
         &self,
         _: &(),
         renderer: &iced::Renderer,
-        theme: &Theme,
-        bounds: iced::Rectangle,
+        _: &Theme,
+        bounds: Rectangle,
         _: iced::mouse::Cursor,
-    ) -> Vec<iced::widget::canvas::Geometry> {
-        use iced::widget::canvas::{Frame, Path, Stroke, Text};
-        let mut frame = Frame::new(renderer, bounds.size());
-        let center = frame.center();
-        frame.stroke(
-            &Path::circle(center, 39.0),
-            Stroke::default()
-                .with_width(9.0)
-                .with_color(Color::from_rgb(0.3, 0.3, 0.3)),
+    ) -> Vec<Geometry> {
+        let mut f = Frame::new(renderer, bounds.size());
+        let fg = self.gray(1.0);
+        let muted = self.gray(0.62);
+        f.fill_rectangle(
+            Point::ORIGIN,
+            bounds.size(),
+            self.rgb(if self.light { 0xf9f9f9 } else { 0x2b2b2b }),
         );
-        let arc = Path::new(|builder| {
-            for i in 0..=48 {
-                let angle = -std::f32::consts::FRAC_PI_2
-                    + std::f32::consts::TAU * self.percent as f32 / 100.0 * i as f32 / 48.0;
-                let point =
-                    iced::Point::new(center.x + angle.cos() * 39.0, center.y + angle.sin() * 39.0);
-                if i == 0 {
-                    builder.move_to(point);
-                } else {
-                    builder.line_to(point);
-                }
+        for (i, account) in ACCOUNTS.iter().enumerate() {
+            let x = i as f32 * 440.0 / 3.0;
+            self.rounded(
+                &mut f,
+                x + 4.0,
+                5.0,
+                440.0 / 3.0 - 8.0,
+                92.0,
+                9.0,
+                if i == self.selected { 0.25 } else { 0.20 },
+            );
+            self.text(
+                &mut f,
+                x + 12.0,
+                26.0,
+                account.0,
+                13.0,
+                self.gray(if i == self.selected { 0.98 } else { 0.75 }),
+            );
+            self.ring(&mut f, x + 35.0, 61.0, 17.0, account.2, account.7);
+            self.text(
+                &mut f,
+                x + 59.0,
+                65.0,
+                &format!("{}%", account.2),
+                14.0,
+                self.gray(0.95),
+            );
+            if i == self.selected {
+                self.rounded(&mut f, x + 440.0 / 6.0 - 7.0, 97.0, 14.0, 3.0, 2.0, 0.70);
             }
-        });
-        frame.stroke(
-            &arc,
-            Stroke::default().with_width(9.0).with_color(self.color),
+        }
+        let p = ACCOUNTS[self.selected];
+        self.text(&mut f, 22.0, 137.0, p.1, 17.0, fg);
+        self.rounded(&mut f, 252.0, 116.0, 100.0, 27.0, 13.0, 0.23);
+        self.text(&mut f, 261.0, 134.0, p.3, 10.0, self.gray(0.75));
+        self.text(
+            &mut f,
+            361.0,
+            137.0,
+            "Usage >",
+            12.0,
+            self.rgb(if self.light { 0x00779b } else { 0x58c7eb }),
         );
+        self.ring(&mut f, 75.0, 205.0, 43.0, p.2, p.7);
+        self.center_text(&mut f, 75.0, 212.0, &format!("{}%", p.2), 17.0, fg);
+        self.text(&mut f, 145.0, 184.0, &format!("{}%", p.2), 28.0, fg);
+        self.text(&mut f, 145.0, 207.0, p.4, 13.0, muted);
+        self.text(&mut f, 145.0, 232.0, p.5, 13.0, self.gray(0.80));
+        self.rounded(&mut f, 20.0, 330.0, 400.0, 38.0, 8.0, 0.18);
+        self.rounded(&mut f, 22.0, 332.0, 396.0, 34.0, 7.0, 0.27);
+        self.text(&mut f, 38.0, 355.0, "Limits", 13.0, fg);
+        self.rounded(&mut f, 20.0, 380.0, 400.0, 172.0, 9.0, 0.18);
+        self.text(&mut f, 35.0, 408.0, "Rate limits", 13.0, self.gray(0.95));
+        self.text(&mut f, 35.0, 432.0, p.6, 12.0, self.gray(0.80));
+        self.text(&mut f, 250.0, 432.0, "resets 18 Oct", 10.0, self.gray(0.58));
+        self.text(
+            &mut f,
+            370.0,
+            432.0,
+            &format!("{}%", p.2),
+            12.0,
+            self.gray(0.90),
+        );
+        self.rounded(&mut f, 35.0, 439.0, 365.0, 8.0, 4.0, 0.30);
+        if p.2 > 0 {
+            f.fill_rectangle(
+                Point::new(35.0, 439.0),
+                Size::new(365.0 * p.2 as f32 / 100.0, 8.0),
+                self.rgb(0x35c878),
+            );
+        }
+        self.text(
+            &mut f,
+            22.0,
+            586.0,
+            "Resets 18 Oct (7 days)",
+            11.0,
+            self.gray(0.56),
+        );
+        self.text(
+            &mut f,
+            315.0,
+            586.0,
+            "Updated 3 min ago",
+            11.0,
+            self.gray(0.56),
+        );
+        vec![f.into_geometry()]
+    }
+}
+impl Panel {
+    fn rgb(&self, value: u32) -> Color {
+        Color::from_rgb8((value >> 16) as u8, (value >> 8) as u8, value as u8)
+    }
+    fn gray(&self, value: f32) -> Color {
+        let v = if self.light { 1.0 - value } else { value };
+        Color::from_rgb(v, v, v)
+    }
+    fn rounded(&self, frame: &mut Frame, x: f32, y: f32, w: f32, h: f32, r: f32, shade: f32) {
+        let path = Path::rounded_rectangle(
+            Point::new(x, y),
+            Size::new(w, h),
+            iced::border::Radius::from(r),
+        );
+        let color = if self.light {
+            let v = 1.0 - shade * 0.25;
+            Color::from_rgb(v, v, v)
+        } else {
+            self.gray(shade)
+        };
+        frame.fill(&path, color);
+    }
+    fn text(&self, frame: &mut Frame, x: f32, y: f32, value: &str, size: f32, color: Color) {
         frame.fill_text(Text {
-            content: format!("{}%", self.percent),
-            position: center,
-            color: theme.palette().text,
-            size: iced::Pixels(20.0),
-            align_x: iced::alignment::Horizontal::Center.into(),
-            align_y: iced::alignment::Vertical::Center,
+            content: value.into(),
+            position: Point::new(x, y - size),
+            size: iced::Pixels(size),
+            color,
+            line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(size + 2.0)),
             ..Text::default()
         });
-        vec![frame.into_geometry()]
+    }
+    fn center_text(&self, frame: &mut Frame, x: f32, y: f32, value: &str, size: f32, color: Color) {
+        frame.fill_text(Text {
+            content: value.into(),
+            position: Point::new(x, y - size),
+            size: iced::Pixels(size),
+            color,
+            align_x: iced::alignment::Horizontal::Center.into(),
+            line_height: iced::widget::text::LineHeight::Absolute(iced::Pixels(size + 2.0)),
+            ..Text::default()
+        });
+    }
+    fn ring(&self, frame: &mut Frame, x: f32, y: f32, r: f32, percent: u8, elapsed: f32) {
+        frame.stroke(
+            &Path::circle(Point::new(x, y), r),
+            Stroke::default()
+                .with_width(5.0)
+                .with_color(self.gray(0.22)),
+        );
+        if percent > 0 {
+            let arc = Path::new(|builder| {
+                builder.arc(canvas::path::Arc {
+                    center: Point::new(x, y),
+                    radius: r,
+                    start_angle: iced::Radians(-std::f32::consts::FRAC_PI_2),
+                    end_angle: iced::Radians(
+                        -std::f32::consts::FRAC_PI_2
+                            + std::f32::consts::TAU * percent as f32 / 100.0,
+                    ),
+                });
+            });
+            frame.stroke(
+                &arc,
+                Stroke::default()
+                    .with_width(5.0)
+                    .with_color(self.rgb(0x35c878)),
+            );
+        }
+        let angle = -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * elapsed;
+        frame.stroke(
+            &Path::line(
+                Point::new(x + (r - 4.0) * angle.cos(), y + (r - 4.0) * angle.sin()),
+                Point::new(x + (r + 4.0) * angle.cos(), y + (r + 4.0) * angle.sin()),
+            ),
+            Stroke::default().with_width(2.0).with_color(self.gray(0.9)),
+        );
     }
 }

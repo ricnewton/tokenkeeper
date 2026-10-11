@@ -1,14 +1,18 @@
 #[path = "../../shared/fixture.rs"]
 mod fixture;
 
-use fixture::{DAYS, PROVIDERS};
 use gpui::{
     actions, div, prelude::*, px, rgb, size, App, Application, Bounds, Context, KeyBinding, Render,
-    SharedString, Window, WindowBounds, WindowOptions,
+    ScrollDelta, Window, WindowBounds, WindowDecorations, WindowKind, WindowOptions,
 };
 use std::{env, time::Duration};
 
 actions!(usage_panel, [ClosePanel]);
+
+const ACCOUNTS: [(usize, u8); 3] = [(0, 6), (3, 33), (4, 0)];
+const GREEN: u32 = 0x31c77b;
+const TRACK_DARK: u32 = 0x383838;
+const TRACK_LIGHT: u32 = 0xd5d7dc;
 
 struct UsagePanel {
     provider: usize,
@@ -18,161 +22,449 @@ struct UsagePanel {
 }
 
 impl UsagePanel {
-    fn surface(&self) -> u32 {
+    fn background(&self) -> u32 {
         if self.dark {
-            0x171922
+            0x2b2b2b
         } else {
-            0xf4f5f8
+            0xf5f5f5
+        }
+    }
+    fn card(&self, selected: bool) -> u32 {
+        if selected {
+            if self.dark {
+                0x404040
+            } else {
+                0xffffff
+            }
+        } else if self.dark {
+            0x333333
+        } else {
+            0xe8e8e8
         }
     }
     fn text(&self) -> u32 {
         if self.dark {
-            0xf0f1f6
+            0xf3f3f3
         } else {
-            0x20232c
+            0x242424
         }
     }
     fn muted(&self) -> u32 {
         if self.dark {
-            0x969aa8
+            0x969696
         } else {
-            0x6d7280
+            0x737373
         }
     }
 }
 
+fn percent(provider: usize) -> u8 {
+    ACCOUNTS
+        .iter()
+        .find(|(id, _)| *id == provider)
+        .map_or(0, |(_, value)| *value)
+}
+
+fn account_order(provider: usize) -> usize {
+    ACCOUNTS
+        .iter()
+        .position(|(id, _)| *id == provider)
+        .unwrap_or(1)
+}
+
+fn ring(
+    percent: u8,
+    elapsed: f32,
+    diameter: f32,
+    stroke: f32,
+    label: bool,
+    text_color: u32,
+    track: u32,
+) -> impl IntoElement {
+    let radius = diameter / 2.0 - stroke / 2.0;
+    let arc = f32::from(percent.min(100)) / 100.0;
+    let canvas = gpui::canvas(
+        move |_, _, _| (),
+        move |bounds, _, window, _| {
+            for (fraction, color) in [(1.0_f32, track), (arc, GREEN)] {
+                if fraction <= 0.0 {
+                    continue;
+                }
+                let mut path = gpui::PathBuilder::stroke(px(stroke));
+                let center = bounds.center();
+                let segments = (64.0 * fraction).ceil() as usize;
+                for i in 0..=segments {
+                    let angle = -std::f32::consts::FRAC_PI_2
+                        + std::f32::consts::TAU * fraction * i as f32 / segments.max(1) as f32;
+                    let point = gpui::point(
+                        center.x + px(angle.cos() * radius),
+                        center.y + px(angle.sin() * radius),
+                    );
+                    if i == 0 {
+                        path.move_to(point);
+                    } else {
+                        path.line_to(point);
+                    }
+                }
+                if let Ok(path) = path.build() {
+                    window.paint_path(path, rgb(color));
+                }
+            }
+            {
+                let angle = -std::f32::consts::FRAC_PI_2 + std::f32::consts::TAU * elapsed;
+                let center = bounds.center();
+                let inner = radius - 4.0;
+                let outer = radius + 4.0;
+                let mut marker = gpui::PathBuilder::stroke(px(1.5));
+                marker.move_to(gpui::point(
+                    center.x + px(angle.cos() * inner),
+                    center.y + px(angle.sin() * inner),
+                ));
+                marker.line_to(gpui::point(
+                    center.x + px(angle.cos() * outer),
+                    center.y + px(angle.sin() * outer),
+                ));
+                if let Ok(marker) = marker.build() {
+                    window.paint_path(marker, rgb(0xffffff));
+                }
+            }
+        },
+    )
+    .absolute()
+    .size_full();
+
+    let mut result = div()
+        .size(px(diameter))
+        .relative()
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(canvas);
+    if label {
+        result = result.child(
+            div()
+                .text_size(px(17.))
+                .font_weight(gpui::FontWeight::NORMAL)
+                .text_color(rgb(text_color))
+                .child(format!("{percent}%")),
+        );
+    }
+    result
+}
+
 impl Render for UsagePanel {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let p = PROVIDERS[self.provider];
-        let background = self.surface();
+        let background = self.background();
         let foreground = self.text();
         let muted = self.muted();
-        let active_tab = self.tab;
-
-        let mut providers = div().flex().gap_2().w_full();
-        for (index, provider) in PROVIDERS.iter().enumerate() {
-            let selected = index == self.provider;
-            let name: SharedString = provider.name.into();
-            let color = (u32::from(provider.color[0]) << 16)
-                | (u32::from(provider.color[1]) << 8)
-                | u32::from(provider.color[2]);
-            providers = providers.child(
-                div()
-                    .id(("provider", index))
-                    .flex_1()
-                    .px_2()
-                    .py_2()
-                    .rounded_md()
-                    .bg(rgb(if selected {
-                        color
-                    } else if self.dark {
-                        0x282b36
-                    } else {
-                        0xe6e8ed
-                    }))
-                    .text_color(rgb(if selected { 0xffffff } else { foreground }))
-                    .text_xs()
-                    .text_center()
-                    .cursor_pointer()
-                    .child(name)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.provider = index;
-                        cx.notify();
-                    })),
-            );
-        }
-
-        let mut tabs = div().flex().gap_2().w_full();
-        for (index, label) in ["Limits", "This cycle", "History"].iter().enumerate() {
-            let selected = index == active_tab;
-            let name: SharedString = (*label).into();
-            tabs = tabs.child(
-                div()
-                    .id(("tab", index))
-                    .px_3()
-                    .py_2()
-                    .rounded_md()
-                    .bg(rgb(if selected { 0x343748 } else { background }))
-                    .text_color(rgb(if selected { 0xffffff } else { muted }))
-                    .text_sm()
-                    .cursor_pointer()
-                    .child(name)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.tab = index;
-                        cx.notify();
-                    })),
-            );
-        }
-
-        let theme_label = if self.dark {
-            "☼  Light theme"
-        } else {
-            "☾  Dark theme"
+        let track = if self.dark { TRACK_DARK } else { TRACK_LIGHT };
+        let active = self.provider;
+        let amount = percent(active);
+        let header = match active {
+            0 => "Cursor",
+            3 => "ChatGPT Codex",
+            4 => "OpenCode Go",
+            _ => "Usage",
         };
-        let mut chart = div().flex().items_end().gap_2().h(px(112.)).w_full();
-        for value in DAYS {
-            chart = chart.child(
+        let plan = match active {
+            3 => "pro · Weekly",
+            0 => "pro · Monthly",
+            _ => "Go · Weekly",
+        };
+        let elapsed = match active {
+            0 => 0.4,
+            3 => 0.09,
+            _ => 0.0,
+        };
+        let limit = match active {
+            3 => "of the 7-day limit",
+            0 => "of the monthly limit",
+            _ => "of the weekly limit",
+        };
+        let pace = if amount == 33 {
+            "On pace for ~368% (over)"
+        } else if amount == 0 {
+            "On pace for ~0%"
+        } else {
+            "On pace for ~67%"
+        };
+
+        let mut cards = div()
+            .absolute()
+            .top(px(5.))
+            .left(px(5.))
+            .w(px(430.))
+            .h(px(92.))
+            .flex()
+            .gap(px(8.));
+        for (index, (provider_id, value)) in ACCOUNTS.iter().copied().enumerate() {
+            let selected = provider_id == active;
+            let name = fixture::PROVIDERS[provider_id].name;
+            cards = cards.child(
                 div()
+                    .id(("account-card", index))
                     .flex_1()
-                    .h(px(f32::from(value) * 0.92))
-                    .rounded_sm()
-                    .bg(rgb((u32::from(p.color[0]) << 16)
-                        | (u32::from(p.color[1]) << 8)
-                        | u32::from(p.color[2]))),
+                    .h_full()
+                    .rounded_lg()
+                    .p(px(8.))
+                    .bg(rgb(self.card(selected)))
+                    .cursor_pointer()
+                    .flex()
+                    .flex_col()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .text_sm()
+                            .text_color(rgb(if selected { foreground } else { muted }))
+                            .child(name),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(ring(
+                                value,
+                                match provider_id {
+                                    0 => 0.4,
+                                    3 => 0.09,
+                                    _ => 0.0,
+                                },
+                                40.,
+                                5.,
+                                false,
+                                foreground,
+                                track,
+                            ))
+                            .child(
+                                div()
+                                    .text_sm()
+                                    .text_color(rgb(foreground))
+                                    .child(format!("{value}%")),
+                            ),
+                    ),
             );
         }
-        let ring_color =
-            (u32::from(p.color[0]) << 16) | (u32::from(p.color[1]) << 8) | u32::from(p.color[2]);
-        let ring = div()
-            .size(px(82.))
-            .relative()
-            .flex()
-            .items_center()
-            .justify_center()
+
+        let selector_left = account_order(active) as f32 * 440.0 / 3.0 + 440.0 / 6.0 - 7.0;
+        let selector_mark = div()
+            .absolute()
+            .top(px(97.))
+            .left(px(selector_left))
+            .w(px(14.))
+            .h(px(3.))
+            .rounded_full()
+            .bg(rgb(if self.dark { 0xbcbcbc } else { 0x777777 }));
+
+        let header_row = div()
+            .absolute()
+            .top(px(115.))
+            .left(px(22.))
+            .w(px(396.))
+            .h(px(28.))
             .child(
-                gpui::canvas(
-                    move |_, _, _| (),
-                    move |bounds, _, window, _| {
-                        for (fraction, color) in [
-                            (1.0_f32, 0x444754_u32),
-                            (p.percent as f32 / 100.0, ring_color),
-                        ] {
-                            let mut path = gpui::PathBuilder::stroke(px(6.));
-                            let center = bounds.center();
-                            for i in 0..=64 {
-                                let angle = -std::f32::consts::FRAC_PI_2
-                                    + std::f32::consts::TAU * fraction * i as f32 / 64.0;
-                                let point = gpui::point(
-                                    center.x + px(angle.cos() * 35.),
-                                    center.y + px(angle.sin() * 35.),
-                                );
-                                if i == 0 {
-                                    path.move_to(point);
-                                } else {
-                                    path.line_to(point);
-                                }
-                            }
-                            if let Ok(path) = path.build() {
-                                window.paint_path(path, rgb(color));
-                            }
-                        }
-                    },
-                )
-                .absolute()
-                .size_full(),
+                div()
+                    .absolute()
+                    .top(px(3.))
+                    .text_size(px(17.))
+                    .text_color(rgb(foreground))
+                    .child(header),
             )
             .child(
                 div()
-                    .text_lg()
-                    .font_weight(gpui::FontWeight::BOLD)
-                    .child(format!("{}%", p.percent)),
+                    .absolute()
+                    .left(px(230.))
+                    .top(px(1.))
+                    .w(px(100.))
+                    .h(px(27.))
+                    .rounded_full()
+                    .bg(rgb(self.card(false)))
+                    .flex()
+                    .items_center()
+                    .px(px(9.))
+                    .text_size(px(10.))
+                    .text_color(rgb(muted))
+                    .child(plan),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(339.))
+                    .top(px(5.))
+                    .text_size(px(12.))
+                    .text_color(rgb(0x62c8e8))
+                    .child("Usage >"),
             );
+
+        let summary = div()
+            .absolute()
+            .top(px(158.))
+            .left(px(30.))
+            .w(px(390.))
+            .h(px(96.))
+            .child(
+                div()
+                    .absolute()
+                    .top(px(2.))
+                    .child(ring(amount, elapsed, 90., 5., true, foreground, track)),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(115.))
+                    .top(px(-2.))
+                    .text_size(px(28.))
+                    .text_color(rgb(foreground))
+                    .child(format!("{amount}%")),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(115.))
+                    .top(px(32.))
+                    .text_size(px(13.))
+                    .text_color(rgb(muted))
+                    .child(limit),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(115.))
+                    .top(px(57.))
+                    .text_size(px(13.))
+                    .text_color(rgb(muted))
+                    .child(pace),
+            );
+
+        let limits_tab = div()
+            .absolute()
+            .top(px(332.))
+            .left(px(22.))
+            .w(px(396.))
+            .h(px(35.))
+            .rounded_lg()
+            .bg(rgb(if self.dark { 0x444444 } else { 0xe5e5e5 }))
+            .flex()
+            .items_center()
+            .px(px(16.))
+            .cursor_pointer()
+            .text_sm()
+            .text_color(rgb(foreground))
+            .child("Limits")
+            .id("limits-tab")
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.tab = 0;
+                cx.notify();
+            }));
+
+        let fraction = amount as f32 / 100.0;
+        let detail = div()
+            .absolute()
+            .top(px(380.))
+            .left(px(20.))
+            .w(px(400.))
+            .h(px(172.))
+            .rounded_lg()
+            .bg(rgb(if self.dark { 0x2e2e2e } else { 0xf4f4f4 }))
+            .child(
+                div()
+                    .absolute()
+                    .left(px(15.))
+                    .top(px(12.))
+                    .text_size(px(13.))
+                    .text_color(rgb(foreground))
+                    .child("Rate limits"),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(15.))
+                    .top(px(35.))
+                    .text_size(px(12.))
+                    .text_color(rgb(muted))
+                    .child("Weekly"),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(230.))
+                    .top(px(36.))
+                    .text_size(px(10.))
+                    .text_color(rgb(muted))
+                    .child("resets 18 Oct"),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(350.))
+                    .top(px(35.))
+                    .text_size(px(12.))
+                    .text_color(rgb(foreground))
+                    .child(format!("{amount}%")),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left(px(15.))
+                    .top(px(59.))
+                    .w(px(365.))
+                    .h(px(8.))
+                    .rounded_full()
+                    .bg(rgb(track))
+                    .child(div().h_full().w(px(365. * fraction)).bg(rgb(GREEN))),
+            );
+
+        let footer = div()
+            .absolute()
+            .top(px(574.))
+            .left(px(22.))
+            .w(px(396.))
+            .h(px(16.))
+            .flex()
+            .items_center()
+            .justify_between()
+            .text_size(px(11.))
+            .text_color(rgb(muted))
+            .child(div().child("Resets 18 Oct (7 days)"))
+            .child(div().child("Updated 3 min ago"));
+
         div()
             .track_focus(&self.focus)
             .on_mouse_down(
                 gpui::MouseButton::Left,
-                cx.listener(|this, _, window, _| window.focus(&this.focus)),
+                cx.listener(|this, event: &gpui::MouseDownEvent, window, cx| {
+                    window.focus(&this.focus);
+                    let x = f32::from(event.position.x);
+                    let y = f32::from(event.position.y);
+                    if (5.0..97.0).contains(&y) {
+                        let width = (430.0 - 16.0) / 3.0;
+                        for (index, (provider, _)) in ACCOUNTS.iter().enumerate() {
+                            let left = 5.0 + index as f32 * (width + 8.0);
+                            if (left..left + width).contains(&x) {
+                                this.provider = *provider;
+                                cx.notify();
+                                break;
+                            }
+                        }
+                    }
+                }),
             )
+            .on_scroll_wheel(cx.listener(|this, event: &gpui::ScrollWheelEvent, _, cx| {
+                let delta = match event.delta {
+                    ScrollDelta::Pixels(point) => f32::from(point.y),
+                    ScrollDelta::Lines(point) => point.y,
+                };
+                if delta != 0.0 {
+                    let index = account_order(this.provider);
+                    let next = if delta > 0.0 {
+                        (index + ACCOUNTS.len() - 1) % ACCOUNTS.len()
+                    } else {
+                        (index + 1) % ACCOUNTS.len()
+                    };
+                    this.provider = ACCOUNTS[next].0;
+                    cx.notify();
+                }
+            }))
             .on_key_down(cx.listener(|_, event: &gpui::KeyDownEvent, _, cx| {
                 if event.keystroke.key == "escape" {
                     cx.quit();
@@ -180,125 +472,18 @@ impl Render for UsagePanel {
             }))
             .size_full()
             .bg(rgb(background))
-            .text_color(rgb(foreground))
-            .p_5()
-            .flex()
-            .flex_col()
-            .gap_4()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .child(
-                        div()
-                            .text_xl()
-                            .font_weight(gpui::FontWeight::BOLD)
-                            .child("◈  Usage"),
-                    )
-                    .child(
-                        div()
-                            .id("theme-toggle")
-                            .text_sm()
-                            .text_color(rgb(muted))
-                            .cursor_pointer()
-                            .child(theme_label)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.dark = !this.dark;
-                                cx.notify();
-                            })),
-                    ),
-            )
-            .child(
-                div()
-                    .text_sm()
-                    .text_color(rgb(0x67d5a3))
-                    .child("●  All systems normal"),
-            )
-            .child(providers)
-            .child(tabs)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .rounded_lg()
-                    .bg(rgb(if self.dark { 0x20232e } else { 0xffffff }))
-                    .p_4()
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap_2()
-                            .child(div().text_xs().text_color(rgb(muted)).child("THIS CYCLE"))
-                            .child(
-                                div()
-                                    .text_3xl()
-                                    .font_weight(gpui::FontWeight::BOLD)
-                                    .child(p.used),
-                            )
-                            .child(
-                                div()
-                                    .text_xs()
-                                    .text_color(rgb(muted))
-                                    .child(format!("of {} · resets in 12 days", p.limit)),
-                            ),
-                    )
-                    .child(ring),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(
-                        div()
-                            .flex()
-                            .justify_between()
-                            .text_sm()
-                            .child("Usage limit")
-                            .child(format!("{}%", p.percent)),
-                    )
-                    .child(
-                        div()
-                            .h(px(8.))
-                            .rounded_full()
-                            .bg(rgb(if self.dark { 0x333743 } else { 0xe1e4eb }))
-                            .child(
-                                div()
-                                    .h_full()
-                                    .w(px(f32::from(p.percent) * 3.35))
-                                    .rounded_full()
-                                    .bg(rgb((u32::from(p.color[0]) << 16)
-                                        | (u32::from(p.color[1]) << 8)
-                                        | u32::from(p.color[2]))),
-                            ),
-                    ),
-            )
-            .child(
-                div()
-                    .flex()
-                    .justify_between()
-                    .items_center()
-                    .text_sm()
-                    .child(match self.tab {
-                        0 => "Recent activity",
-                        1 => "Cycle activity",
-                        _ => "Usage history",
-                    })
-                    .child(div().text_xs().text_color(rgb(muted)).child("Last 12 days")),
-            )
-            .child(chart)
-            .child(
-                div()
-                    .text_xs()
-                    .text_color(rgb(muted))
-                    .child("All values are sample data"),
-            )
+            .child(cards)
+            .child(selector_mark)
+            .child(header_row)
+            .child(summary)
+            .child(limits_tab)
+            .child(detail)
+            .child(footer)
     }
 }
 
 fn main() {
+    let _ = fixture::DAYS;
     let mut dark = true;
     let mut auto_close = None;
     let mut args = env::args().skip(1);
@@ -318,11 +503,15 @@ fn main() {
     Application::new().run(move |cx: &mut App| {
         cx.bind_keys([KeyBinding::new("escape", ClosePanel, None)]);
         cx.on_action(|_: &ClosePanel, cx| cx.quit());
-        let bounds = Bounds::centered(None, size(px(440.0), px(600.0)), cx);
+        let bounds = Bounds::centered(None, size(px(440.0), px(606.0)), cx);
         cx.open_window(
             WindowOptions {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
+                titlebar: None,
+                kind: WindowKind::Normal,
+                window_decorations: Some(WindowDecorations::Client),
                 focus: true,
+                is_movable: false,
                 is_resizable: false,
                 ..Default::default()
             },
@@ -331,7 +520,7 @@ fn main() {
                     let focus = cx.focus_handle();
                     window.focus(&focus);
                     UsagePanel {
-                        provider: 0,
+                        provider: 3,
                         tab: 0,
                         dark,
                         focus,

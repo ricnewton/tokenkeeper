@@ -2,3 +2,5 @@
 /.local/
 
 /linux/target
+
+/experiments/**/target/
