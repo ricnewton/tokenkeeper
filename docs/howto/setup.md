@@ -19,15 +19,19 @@ After building, quit the running copy, replace the installed executable with
 
 ### Linux / KDE
 
-The Linux build uses GTK3, Cairo, GIO, libdbusmenu and Secret Service. For Ubuntu,
+The Linux popup uses GTK3 and Cairo. For Ubuntu,
 install the runtime libraries:
 
 ```bash
-sudo apt install libgtk-3-0t64 libdbusmenu-gtk3-4 libdbusmenu-glib4 libcairo2 libsecret-1-0 libssl3t64 curl xdg-utils
+sudo apt install libgtk-3-0t64 libcairo2 ca-certificates
 ```
 
 Package names may differ on other distributions. A running Secret Service,
 such as KWallet's Secret Service integration, is required to save credentials.
+The desktop must provide StatusNotifier tray support and an XDG OpenURI portal
+(KDE normally supplies these). The app talks to these services directly through
+Rust D-Bus clients; libsecret, libdbusmenu, curl, OpenSSL and xdg-utils are not
+app runtime requirements. Existing saved accounts remain compatible.
 
 With Rust installed:
 

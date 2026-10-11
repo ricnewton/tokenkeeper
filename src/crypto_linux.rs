@@ -1,9 +1,6 @@
-//! Linux randomness and PKCE helpers; OpenSSL is used only for SHA-256.
+//! Linux randomness and RustCrypto SHA-256 for browser PKCE.
+use sha2::{Digest, Sha256};
 use std::io::Read;
-#[link(name = ":libcrypto.so.3")]
-unsafe extern "C" {
-    fn SHA256(data: *const u8, len: usize, out: *mut u8) -> *mut u8;
-}
 pub fn random_bytes<const N: usize>() -> [u8; N] {
     let mut b = [0; N];
     std::fs::File::open("/dev/urandom")
@@ -12,12 +9,9 @@ pub fn random_bytes<const N: usize>() -> [u8; N] {
     b
 }
 pub fn sha256(data: &[u8]) -> [u8; 32] {
-    let mut out = [0; 32];
-    unsafe {
-        assert!(!SHA256(data.as_ptr(), data.len(), out.as_mut_ptr()).is_null());
-    }
-    out
+    Sha256::digest(data).into()
 }
+
 pub fn uuid_v4() -> String {
     let mut b = random_bytes::<16>();
     b[6] = (b[6] & 15) | 64;

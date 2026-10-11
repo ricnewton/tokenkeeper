@@ -50,8 +50,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install --no-install-recommends -y \
-            libgtk-3-0t64 libdbusmenu-gtk3-4 libdbusmenu-glib4 \
-            libcairo2 libsecret-1-0 libssl3t64 curl xdg-utils
+            libgtk-3-0t64 libcairo2 ca-certificates
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@e2a55d2ffb04f378e9626c28d38b36d230d1e12f

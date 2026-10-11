@@ -46,8 +46,9 @@ or CLIs. Credentials are secured with Windows DPAPI or Linux Secret Service/KWal
 
 ## Quick start
 
-Install Rust. Linux also needs GTK3, Cairo, GIO, libdbusmenu, Secret Service,
-OpenSSL, curl and xdg-utils; see [setup](docs/howto/setup.md) for package names.
+Install Rust. Linux needs GTK3 and Cairo, plus desktop services for the tray,
+wallet and browser launching; see [setup](docs/howto/setup.md). Networking and
+cryptography are bundled into the executable.
 
 ```bash
 cargo test --release --locked

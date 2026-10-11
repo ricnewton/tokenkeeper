@@ -1,4 +1,5 @@
 //! GTK3/Cairo flyout with native KDE StatusNotifier integration.
+use crate::linux_tray::{MenuAction as Action, MenuEntry};
 use crate::model::{Detail, ProviderId, Snapshot, Unit, View};
 use crate::provider::Provider;
 use crate::worker::{Cmd, Event, Worker};
@@ -40,22 +41,6 @@ unsafe extern "C" {
     fn gtk_widget_get_visible(widget: P) -> c_int;
     fn gtk_widget_queue_draw(widget: P);
     fn gtk_widget_add_events(widget: P, events: c_int);
-    fn gtk_menu_new() -> P;
-    fn gtk_menu_popup(
-        menu: P,
-        parent_shell: P,
-        parent_item: P,
-        position: P,
-        data: P,
-        button: u32,
-        time: u32,
-    );
-    fn gtk_menu_item_new_with_label(label: *const c_char) -> P;
-    fn gtk_separator_menu_item_new() -> P;
-    fn gtk_menu_shell_append(shell: P, child: P);
-    fn gtk_menu_item_set_submenu(item: P, submenu: P);
-    fn gtk_menu_item_set_label(item: P, label: *const c_char);
-    fn gtk_widget_set_sensitive(widget: P, sensitive: c_int);
     fn gtk_clipboard_get(selection: P) -> P;
     fn gtk_clipboard_set_text(clipboard: P, text: *const c_char, len: c_int);
 }
@@ -127,32 +112,18 @@ struct Slot {
     worker: Option<Worker>,
     view: View,
     last_good: Option<Rc<Snapshot>>,
-    sign: P,
-    show: P,
 }
 struct App {
     window: P,
     area: P,
-    _menu: P,
     slots: Vec<Slot>,
     events: Receiver<(ProviderId, Event)>,
     active: usize,
     tab: usize,
-    autostart_item: P,
     demo: bool,
     light: bool,
     last_focus_hide: Option<Instant>,
 }
-#[derive(Clone, Copy)]
-enum Action {
-    Panel,
-    Refresh,
-    Quit,
-    Autostart,
-    Show(usize),
-    Sign(usize),
-}
-struct MenuData(Action);
 fn c(s: &str) -> CString {
     CString::new(s.replace('\0', " ")).unwrap()
 }
@@ -168,51 +139,10 @@ unsafe fn signal(widget: P, name: &[u8], cb: P, data: P) {
         g_signal_connect_data(widget, name.as_ptr().cast(), cb, data, ptr::null_mut(), 0);
     }
 }
-unsafe fn menu_item(menu: P, label: &str, action: Action) -> P {
-    let item = unsafe { gtk_menu_item_new_with_label(c(label).as_ptr()) };
-    unsafe {
-        gtk_menu_shell_append(menu, item);
-        signal(
-            item,
-            b"activate\0",
-            on_menu as P,
-            Box::into_raw(Box::new(MenuData(action))).cast(),
-        )
-    };
-    item
-}
-unsafe fn separator(menu: P) {
-    unsafe { gtk_menu_shell_append(menu, gtk_separator_menu_item_new()) };
-}
-unsafe fn submenu(menu: P, label: &str) -> P {
-    let item = unsafe { gtk_menu_item_new_with_label(c(label).as_ptr()) };
-    let child = unsafe { gtk_menu_new() };
-    unsafe {
-        gtk_menu_item_set_submenu(item, child);
-        gtk_menu_shell_append(menu, item);
-    }
-    child
-}
-extern "C" fn on_menu(_widget: P, data: P) {
-    let action = unsafe { (*(data as *const MenuData)).0 };
-    in_app(|a| a.action(action));
-}
 fn on_tray(action: crate::linux_tray::Action) {
     in_app(|a| match action {
         crate::linux_tray::Action::Activate(x, y) => a.toggle_panel(x, y),
-        crate::linux_tray::Action::ContextMenu => unsafe {
-            // KDE normally renders the exported DBusMenu itself. This is the
-            // fallback for hosts that invoke ContextMenu instead.
-            gtk_menu_popup(
-                a._menu,
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                ptr::null_mut(),
-                3,
-                0,
-            );
-        },
+        crate::linux_tray::Action::Menu(action) => a.action(action),
         crate::linux_tray::Action::Scroll(delta) => {
             let ready = a
                 .slots
@@ -273,6 +203,7 @@ extern "C" fn on_click(_widget: P, ev: *const ButtonEvent, _data: P) -> c_int {
     1
 }
 extern "C" fn on_tick(_data: P) -> c_int {
+    crate::linux_tray::poll();
     in_app(|a| a.tick());
     1
 }
@@ -303,9 +234,6 @@ extern "C" fn on_key_press(widget: P, event: *const KeyEvent, _data: P) -> c_int
     } else {
         0
     }
-}
-pub fn open_url(url: &str) {
-    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 pub fn main() {
     let args: Vec<String> = std::env::args().collect();
@@ -372,11 +300,6 @@ impl App {
             );
             signal(window, b"delete-event\0", on_delete as P, ptr::null_mut());
         }
-        let menu = unsafe { gtk_menu_new() };
-        unsafe {
-            menu_item(menu, "Show usage panel", Action::Panel);
-            separator(menu)
-        };
         let (tx, events) = mpsc::channel();
         let slots = ProviderId::ALL
             .iter()
@@ -411,51 +334,21 @@ impl App {
                         View::Loading
                     },
                     last_good: None,
-                    sign: ptr::null_mut(),
-                    show: ptr::null_mut(),
                 }
             })
             .collect::<Vec<_>>();
-        let accounts_menu = unsafe { submenu(menu, "Accounts") };
-        let mut slots = slots;
-        for (i, s) in slots.iter_mut().enumerate() {
-            s.sign = unsafe {
-                menu_item(
-                    accounts_menu,
-                    &format!("Sign in to {}…", s.id.name()),
-                    Action::Sign(i),
-                )
-            };
-        }
-        let icon_menu = unsafe { submenu(menu, "Switch tray icon") };
-        for (i, s) in slots.iter_mut().enumerate() {
-            unsafe {
-                s.show = menu_item(icon_menu, s.id.name(), Action::Show(i));
-            }
-        }
-        unsafe {
-            separator(menu);
-            menu_item(menu, "Refresh now", Action::Refresh)
-        };
-        let autostart_item = unsafe { menu_item(menu, "Autostart - Off", Action::Autostart) };
-        unsafe {
-            menu_item(menu, "Quit", Action::Quit);
-            gtk_widget_show_all(menu)
-        };
         if !demo {
-            if let Err(error) = crate::linux_tray::start(menu, on_tray) {
+            if let Err(error) = crate::linux_tray::start(on_tray) {
                 eprintln!("{error}");
             }
         }
         let mut a = Self {
             window,
             area,
-            _menu: menu,
             slots,
             events,
             active: 0,
             tab: 0,
-            autostart_item,
             demo,
             light: light_theme(),
             last_focus_hide: None,
@@ -647,35 +540,54 @@ impl App {
         }
     }
     fn refresh(&mut self) {
-        for (i, s) in self.slots.iter().enumerate() {
-            unsafe {
-                gtk_menu_item_set_label(
-                    s.show,
-                    c(&format!(
+        let accounts = self
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| MenuEntry::Item {
+                label: slot.view.account_menu_label(slot.id.name()),
+                enabled: !matches!(slot.view, View::Loading),
+                action: Action::Sign(i),
+            })
+            .collect();
+        let icons = self
+            .slots
+            .iter()
+            .enumerate()
+            .map(|(i, slot)| {
+                MenuEntry::item(
+                    format!(
                         "{}{}",
-                        s.id.name(),
+                        slot.id.name(),
                         if i == self.active { " (active)" } else { "" }
-                    ))
-                    .as_ptr(),
-                );
-                gtk_menu_item_set_label(
-                    s.sign,
-                    c(&s.view.account_menu_label(s.id.name())).as_ptr(),
-                );
-                gtk_widget_set_sensitive(s.sign, (!matches!(s.view, View::Loading)) as c_int);
-            }
-        }
-        unsafe {
-            gtk_menu_item_set_label(
-                self.autostart_item,
-                c(if autostart::is_enabled() {
+                    ),
+                    Action::Show(i),
+                )
+            })
+            .collect();
+        let menu = vec![
+            MenuEntry::item("Show usage panel", Action::Panel),
+            MenuEntry::Separator,
+            MenuEntry::Submenu {
+                label: "Accounts".into(),
+                children: accounts,
+            },
+            MenuEntry::Submenu {
+                label: "Switch tray icon".into(),
+                children: icons,
+            },
+            MenuEntry::Separator,
+            MenuEntry::item("Refresh now", Action::Refresh),
+            MenuEntry::item(
+                if autostart::is_enabled() {
                     "Autostart - On"
                 } else {
                     "Autostart - Off"
-                })
-                .as_ptr(),
-            )
-        };
+                },
+                Action::Autostart,
+            ),
+            MenuEntry::item("Quit", Action::Quit),
+        ];
         let usage = self.slots[self.active]
             .view
             .snapshot()
@@ -706,6 +618,7 @@ impl App {
             } else {
                 &summary
             },
+            menu,
         );
         unsafe {
             gtk_widget_set_size_request(self.area, 440, self.panel_height() as c_int);
@@ -741,7 +654,7 @@ impl App {
                 self.tab = i;
                 self.refresh();
             }
-            Hit::Usage => open_url(self.slots[self.active].id.usage_url()),
+            Hit::Usage => crate::open_url(self.slots[self.active].id.usage_url()),
             Hit::None => {}
         }
     }
@@ -1237,8 +1150,6 @@ fn demo_sheet(path: &str, args: &[String]) {
                     error: None,
                 },
                 last_good: None,
-                sign: ptr::null_mut(),
-                show: ptr::null_mut(),
             }
         })
         .collect();
@@ -1246,7 +1157,6 @@ fn demo_sheet(path: &str, args: &[String]) {
     let mut app = App {
         window: ptr::null_mut(),
         area: ptr::null_mut(),
-        _menu: ptr::null_mut(),
         slots,
         events,
         active: args
@@ -1266,7 +1176,6 @@ fn demo_sheet(path: &str, args: &[String]) {
             .and_then(|i| args.get(i + 1))
             .and_then(|s| s.parse().ok())
             .unwrap_or(1),
-        autostart_item: ptr::null_mut(),
         demo: true,
         light: light_theme(),
         last_focus_hide: None,

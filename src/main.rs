@@ -47,6 +47,8 @@ mod time;
 #[cfg(windows)]
 mod clipboard;
 #[cfg(target_os = "linux")]
+mod desktop_linux;
+#[cfg(target_os = "linux")]
 mod linux_app;
 #[cfg(target_os = "linux")]
 mod linux_tray;
@@ -59,7 +61,7 @@ mod sheet;
 mod windows_app;
 
 #[cfg(target_os = "linux")]
-pub use linux_app::open_url;
+pub use desktop_linux::open_url;
 #[cfg(windows)]
 pub use windows_app::{WM_WHEEL_SWITCH, open_url};
 

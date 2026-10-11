@@ -2,7 +2,7 @@
 
 A Windows and Linux tray app that shows how much of your AI-tool allowance you've
 used: Cursor, GitHub Copilot, Claude Code, ChatGPT Codex and OpenCode Go. Windows ships as
-a size-optimised exe; Linux uses GTK3/Cairo/GIO and libdbusmenu runtime libraries.
+a size-optimised exe; Linux uses GTK3/Cairo for the popup, with Rust clients for desktop services.
 
 | Document | Covers |
 | --- | --- |
@@ -103,13 +103,13 @@ A provider-neutral `Snapshot` contains:
 | --- | --- |
 | `main.rs` | Platform entry point and `--check-codex` read-only usage command |
 | `main_windows.rs`, `popup.rs`, `clipboard.rs`, `sheet.rs` | Windows tray, Direct2D panel, clipboard and previews |
-| `linux_tray.rs` | GIO StatusNotifierItem, ARGB pixel icons, activation, wheel and hover summary |
+| `linux_tray.rs` | Rust ksni StatusNotifierItem and native menus, ARGB icons, activation, wheel and hover summary |
 | `linux_app.rs` | GTK3/Cairo flyout, direct KDE tray integration, menu and demo rendering |
 | `worker.rs`, `provider.rs`, `model.rs` | Shared polling/sign-in worker, provider traits and UI snapshots |
 | `cursor.rs`, `copilot.rs`, `claude.rs`, `codex.rs`, `opencode.rs` | Shared provider implementations; ChatGPT and OpenCode use browser authorization and supplier HTTPS endpoints |
 | `tracker.rs`, `mock.rs`, `icon.rs` | Usage histories, demo snapshots and ring renderer |
 | `http_windows.rs`, `crypto_windows.rs`, `store_windows.rs`, `time_windows.rs`, `autostart_windows.rs` | Windows WinHTTP, CNG/DPAPI, AppData, calendar and Run key |
-| `http_linux.rs`, `crypto_linux.rs`, `store_linux.rs`, `time_linux.rs`, `autostart_linux.rs` | Linux curl, OpenSSL/OS RNG, Secret Service and XDG paths |
+| `http_linux.rs`, `crypto_linux.rs`, `store_linux.rs`, `time_linux.rs`, `autostart_linux.rs` | Linux ureq/rustls, RustCrypto/OS RNG, Rust Secret Service and XDG paths |
 
 The older architecture examples above describe the Windows host. On Linux, the GTK loop polls the same worker-event channel rather than receiving `WM_WORKER_EVENT`. See [ui.md](ui.md) for the deliberate Linux interaction differences and [providers.md](providers.md) for the Codex account contract.
 

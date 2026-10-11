@@ -65,7 +65,9 @@ The menu contains Accounts (provider-first sign in/out or cancel actions), Switc
 
 `linux_app.rs` provides a dark GTK3/Cairo flyout with no title bar or taskbar entry. Left click toggles it; losing focus or pressing Escape hides it. A 400 ms guard prevents the click which dismissed it from reopening it. The panel omits signed-out columns, uses a compact single-provider layout, and scrolls when needed to show all limit meters. Activation coordinates select the monitor/workarea; placement is best-effort where a Wayland compositor controls window positioning. `TOKENKEEPER_THEME=light` explicitly selects light mode (`AI_USAGE_THEME` remains a compatibility alias).
 
-`linux_tray.rs` implements KDE’s StatusNotifierItem protocol directly via GIO. It publishes the shared Windows ring renderer as network-order ARGB pixmaps at several tray sizes, emits icon-change signals, handles Activate and Scroll, and exports the existing GTK menu through libdbusmenu. Right-click account and provider-selection actions are grouped into Accounts and Switch tray icon; the selected provider is marked.
+`linux_tray.rs` uses the Rust `ksni` crate for KDE’s StatusNotifierItem protocol and native D-Bus menus. It publishes the shared Windows ring renderer as network-order ARGB pixmaps at several tray sizes and queues activation, scroll and menu actions for the GTK main thread. Right-click account and provider-selection actions are grouped into Accounts and Switch tray icon; the selected provider is marked.
+
+Plasma renders the exported native context menu and hover tooltip; our app controls their content rather than their toolkit or styling. The separate usage popup belongs to the app and can use a different GUI toolkit. Native Wayland window positioning and activation depend on compositor policy and must be tested during any popup migration.
 
 KDE supplies a hover summary from the live ToolTip property. The StatusNotifier protocol has no pointer-enter/leave events or tray rectangle, so the exact app-owned Windows hover card is not reproduced on Wayland. The hover data includes signed-in providers, current usage, plans and reset dates.
 
