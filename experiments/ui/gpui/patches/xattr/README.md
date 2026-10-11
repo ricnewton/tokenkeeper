@@ -20,3 +20,5 @@ build on *all* platforms but always fail on unsupported platforms.
    do so, this library will fail to compile on unsupported platforms.
 2. Alternatively, you can detect unsupported platforms at runtime by checking
    the `xattr::SUPPORTED_PLATFORM` boolean.
+
+Vendored from crates.io xattr 0.2.3 (upstream commit e42c1da499b72103a9c9ef5693ff31f998ad31e6). The sole compatibility change aliases ENOATTR to ENODATA on Linux. Used only by the GPUI experiment; original licenses are retained.
