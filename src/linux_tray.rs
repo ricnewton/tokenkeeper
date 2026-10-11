@@ -1,5 +1,5 @@
 //! KDE StatusNotifierItem and native D-Bus menus implemented in Rust.
-//! D-Bus callbacks enqueue actions; only the GTK main thread touches windows.
+//! D-Bus callbacks enqueue actions; only the Iced main thread touches windows.
 use ksni::blocking::TrayMethods;
 use std::cell::RefCell;
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -114,10 +114,9 @@ impl ksni::Tray for Tray {
 struct State {
     handle: ksni::blocking::Handle<Tray>,
     events: Receiver<Action>,
-    action: fn(Action),
 }
 thread_local! { static STATE: RefCell<Option<State>> = const { RefCell::new(None) }; }
-pub fn start(action: fn(Action)) -> Result<(), String> {
+pub fn start() -> Result<(), String> {
     let (tx, events) = mpsc::channel();
     let handle = Tray {
         events: tx,
@@ -128,29 +127,18 @@ pub fn start(action: fn(Action)) -> Result<(), String> {
     }
     .spawn()
     .map_err(|e| format!("Could not publish KDE tray item: {e}"))?;
-    STATE.with(|s| {
-        *s.borrow_mut() = Some(State {
-            handle,
-            events,
-            action,
-        })
-    });
+    STATE.with(|s| *s.borrow_mut() = Some(State { handle, events }));
     Ok(())
 }
-pub fn poll() {
-    // Drop the state borrow before invoking app actions that can update this tray.
-    let pending = STATE.with(|state| {
+pub fn drain() -> Vec<Action> {
+    STATE.with(|state| {
         state
             .borrow()
             .as_ref()
-            .map(|state| (state.action, state.events.try_iter().collect::<Vec<_>>()))
-    });
-    if let Some((callback, events)) = pending {
-        for action in events {
-            callback(action);
-        }
-    }
+            .map_or_else(Vec::new, |state| state.events.try_iter().collect())
+    })
 }
+
 fn pixels(rgba: &[u8]) -> Vec<u8> {
     rgba.chunks_exact(4)
         .flat_map(|p| [p[3], p[0], p[1], p[2]])

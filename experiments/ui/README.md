@@ -40,6 +40,6 @@ revision remains pending. Escape passed on XWayland for all three.
 KDE owns its tray menu and tooltip. These prototypes evaluate the app-owned usage
 window. An undecorated toplevel does not establish tray anchoring, activation,
 focus behavior, monitor clamping or mixed DPI parity. Those remain migration
-gates, alongside Windows execution. Production continues to use GTK3.
+gates, alongside Windows execution. Production Linux has since moved to Iced; the standalone experiments remain for comparison.
 
 See the [measured evaluation](../../docs/design/ui-toolkit-evaluation.md).

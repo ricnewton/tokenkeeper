@@ -1,9 +1,9 @@
 # Linux popup toolkit evaluation
 
-The production popup still uses GTK3/Cairo. Networking, hashing, Secret Service,
+The production Linux popup now uses Iced/tiny-skia; Windows retains its native UI. Networking, hashing, Secret Service,
 StatusNotifierItem/DBusMenu and browser launching have already moved to bundled
 Rust clients (`81b71d7`), with native Windows/Linux CI and live desktop checks.
-Replacing the popup is a separate change.
+The subsequent Iced migration preserves the existing custom layout and real provider flows.
 
 ## Working comparisons
 
@@ -70,15 +70,39 @@ the existing borderless three-card UI is required. All three now reproduce that
 layout, so standard widget appearance is no longer a deciding factor. Iced is the
 leading resource-use candidate. Selection should weigh font/rendering quality and
 build/runtime requirements, then verify real tray activation and placement before
-migration. Production continues to use GTK3.
+migration. Linux production has since switched to Iced; tray placement uses X11/XWayland by default.
 
 Stage 1 verification: 48 release tests passed, with two separately passing live
 integration checks (browser portal and isolated wallet create/read/replace/delete).
 Existing account usage, native menu actions/tooltips and installed binary linkage
 were checked. Windows GNU compilation passed, and
 [native Windows/Linux CI](https://github.com/ricnewton/tokenkeeper/actions/runs/38164201063)
-passed. The verified 3,543,128-byte production binary is installed in
-`~/.local/bin/tokenkeeper` and retains the GTK popup.
+passed. That verified 3,543,128-byte binary was the GTK baseline before the Iced migration.
+
+## Production Iced migration
+
+The optimized Linux release is 8,027,448 bytes (7.66 MiB), with the existing
+`opt-level = "s"`, full LTO, one codegen unit, stripping and abort-on-panic.
+A credential-free production demo measured 15.1 MiB RSS and 0.33% idle CPU;
+the installed app with Cursor, Codex and OpenCode usage measured 20.7 MiB RSS.
+These are short local process measurements, excluding the desktop compositor.
+Canvas geometry is cached between polling ticks, with invalidation on data,
+selection/theme, dimensions and minute changes.
+
+53 locked release tests passed; 2 optional desktop tests were skipped. Linux
+warning-free release build and Windows GNU compile check passed. Production
+framebuffer captures passed on X11 and native Wayland in dark/light themes.
+The installed app published all three saved accounts in its tray tooltip; 20
+activation toggles left 44 threads and 19 file descriptors unchanged. GTK, Cairo,
+GIO, libsecret, libdbusmenu and OpenSSL are absent from direct executable linkage;
+window-system libraries load dynamically. Clipboard writes use Iced.
+
+X11/XWayland is preferred when available for tray placement and timestamp-based
+activation. X11 dismissal hides and reuses the popup, keeping the clipboard
+connection; resize events reapply workarea clamping. Native Wayland remains
+compositor controlled and selectable via `TOKENKEEPER_BACKEND=wayland`. Visual
+click-away, real sign-in clipboard paste, mixed-monitor scaling and native Windows
+execution still require user/desktop review. Windows keeps its native UI.
 
 ## KDE menu, tooltip and app popup
 

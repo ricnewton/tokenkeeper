@@ -15,7 +15,7 @@ Claude Code, ChatGPT Codex and OpenCode Go usage. Start with `docs/design/README
 - Minimise user-installed runtime dependencies. Prefer crates bundled into the executable over extra system libraries or commands. The release profile is size-optimised.
 - Claude requests must not use a browser-like User-Agent: Anthropic answers them with 429.
 
-- Linux/KDE build: `cargo test --locked; cargo build --locked` (GTK3/Cairo runtime libraries required). Run `target/debug/tokenkeeper --demo` with isolated XDG paths for a non-credential UI preview, or `--demo-sheet .local/previews/panel.png` for offscreen Cairo rendering.
+- Linux/KDE build: `cargo test --locked; cargo build --locked` (Iced software renderer; desktop X11/XWayland or Wayland libraries and fonts required). Run `target/debug/tokenkeeper --demo` with isolated XDG paths for a non-credential UI preview, or `--demo-sheet .local/previews/panel.png` for an isolated Iced framebuffer PNG preview (requires a display server).
 - All suppliers MUST use their web APIs directly. Never require, invoke, or import credentials from supplier-installed apps/CLIs. ChatGPT uses browser OAuth PKCE, direct HTTPS usage requests and app-owned secure credentials.
 - First launch is idle: do not open provider sign-in or enable autostart automatically.
 - Keep Linux and Windows builds/tests warning-free; verify with `RUSTFLAGS=-Dwarnings`.

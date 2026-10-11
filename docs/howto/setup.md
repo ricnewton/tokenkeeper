@@ -19,11 +19,12 @@ After building, quit the running copy, replace the installed executable with
 
 ### Linux / KDE
 
-The Linux popup uses GTK3 and Cairo. For Ubuntu,
-install the runtime libraries:
+The Linux popup uses Iced with a bundled software renderer. It does not require
+GTK3, Cairo, OpenGL or Vulkan. A normal X11/XWayland or Wayland desktop supplies
+the window-system libraries and fonts. Minimal Ubuntu installations may need:
 
 ```bash
-sudo apt install libgtk-3-0t64 libcairo2 ca-certificates
+sudo apt install ca-certificates libx11-6 libxkbcommon0 libwayland-client0 fonts-dejavu-core
 ```
 
 Package names may differ on other distributions. A running Secret Service,
@@ -31,7 +32,7 @@ such as KWallet's Secret Service integration, is required to save credentials.
 The desktop must provide StatusNotifier tray support and an XDG OpenURI portal
 (KDE normally supplies these). The app talks to these services directly through
 Rust D-Bus clients; libsecret, libdbusmenu, curl, OpenSSL and xdg-utils are not
-app runtime requirements. Existing saved accounts remain compatible.
+app runtime requirements. GTK3, Cairo and GIO are also no longer required. Existing saved accounts remain compatible.
 
 With Rust installed:
 
@@ -46,5 +47,10 @@ install -m 755 target/release/tokenkeeper ~/.local/bin/tokenkeeper
 Click **Autostart - Off** in the tray menu to enable desktop-login autostart;
 the label changes to **Autostart - On**.
 An existing enabled entry follows the executable when you move it.
-KDE controls native hover tooltips; exact flyout positioning can depend on the compositor.
+KDE controls native hover tooltips. TokenKeeper prefers X11/XWayland when
+`DISPLAY` is available, allowing tray-relative positioning and timestamp-based
+activation. Set `TOKENKEEPER_BACKEND=wayland` to select native Wayland, or
+`TOKENKEEPER_BACKEND=x11` to explicitly select X11. Native Wayland placement and
+activation remain compositor controlled. `TOKENKEEPER_THEME=light` selects light
+mode; dark is the default.
 

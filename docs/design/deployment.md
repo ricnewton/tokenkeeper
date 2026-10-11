@@ -10,8 +10,8 @@
 | Multi-provider UI | Column glance and panel, active-provider switching by menu and mouse wheel, per-provider sign in/out |
 | ChatGPT Codex | Browser sign-in, secure credential persistence and direct usage reads verified on Linux/KDE |
 | OpenCode Go | User verified browser device sign-in and Console quota reads with a live subscription on Linux/KDE |
-| Linux/KDE | Native StatusNotifier tray, GTK/Cairo panel, click-away dismissal, light-mode option and autostart verified |
-| Tests | 43 tests covering parsing, callbacks, PKCE, refresh rotation and persistence ordering, workspace scope, process exclusion and provider switching; warning-free Linux release and Windows cross-check |
+| Linux/KDE | Native StatusNotifier tray; Iced software-rendered panel, GTK/Cairo removed; X11/XWayland tray activation/reopening checked; visual click-away review remains pending |
+| Tests | 53 release tests pass (2 optional desktop checks skipped), covering providers, persistence, popup lifecycle, clipboard readiness and monitor geometry; warning-free Linux release and Windows cross-check |
 | Windows follow-up | Runtime testing of the port remains pending; compilation has passed |
 
 ## Installing and updating

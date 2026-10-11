@@ -63,16 +63,23 @@ The menu contains Accounts (provider-first sign in/out or cancel actions), Switc
 
 ## Linux/KDE panel and tray
 
-`linux_app.rs` provides a dark GTK3/Cairo flyout with no title bar or taskbar entry. Left click toggles it; losing focus or pressing Escape hides it. A 400 ms guard prevents the click which dismissed it from reopening it. The panel omits signed-out columns, uses a compact single-provider layout, and scrolls when needed to show all limit meters. Activation coordinates select the monitor/workarea; placement is best-effort where a Wayland compositor controls window positioning. `TOKENKEEPER_THEME=light` explicitly selects light mode (`AI_USAGE_THEME` remains a compatibility alias).
+`linux_app.rs` and `linux_panel.rs` provide a dark Iced/tiny-skia flyout with no title bar or taskbar entry. Left click toggles it; losing focus or pressing Escape hides it. A 400 ms guard prevents the click which dismissed it from reopening it. The panel omits signed-out columns, uses a compact single-provider layout, and scrolls when needed to show all limit meters using an invisible scrollbar. Activation coordinates select the monitor/workarea; placement is best-effort where a Wayland compositor controls window positioning. `TOKENKEEPER_THEME=light` explicitly selects light mode (`AI_USAGE_THEME` remains a compatibility alias).
 
-`linux_tray.rs` uses the Rust `ksni` crate for KDE’s StatusNotifierItem protocol and native D-Bus menus. It publishes the shared Windows ring renderer as network-order ARGB pixmaps at several tray sizes and queues activation, scroll and menu actions for the GTK main thread. Right-click account and provider-selection actions are grouped into Accounts and Switch tray icon; the selected provider is marked.
+`linux_tray.rs` uses the Rust `ksni` crate for KDE’s StatusNotifierItem protocol and native D-Bus menus. It publishes the shared Windows ring renderer as network-order ARGB pixmaps at several tray sizes and queues activation, scroll and menu actions for the Iced main thread. Right-click account and provider-selection actions are grouped into Accounts and Switch tray icon; the selected provider is marked.
 
 Plasma renders the exported native context menu and hover tooltip; our app controls their content rather than their toolkit or styling. The separate usage popup belongs to the app and can use a different GUI toolkit. Native Wayland window positioning and activation depend on compositor policy and must be tested during any popup migration.
 
 KDE supplies a hover summary from the live ToolTip property. The StatusNotifier protocol has no pointer-enter/leave events or tray rectangle, so the exact app-owned Windows hover card is not reproduced on Wayland. The hover data includes signed-in providers, current usage, plans and reset dates.
 
-For X11/XWayland GTK windows, tray activation obtains a fresh X server timestamp and passes it to `gtk_window_present_with_time`. The native window selects property-change events before requesting the timestamp. This gives KWin a valid activation time so the panel receives focus immediately and can dismiss on the first click away. Other GTK display backends retain normal presentation behavior.
-
-### Account menu decisions
-
-Task: inspect account state and connect, disconnect or cancel without opening another screen. Provider names lead each row for stable scanning; connected accounts show the explicit Sign out action. Signed-out accounts retain an enabled Sign in action, while in-progress authentication offers Cancel sign-in. Only the initial credential-loading state is disabled. This combines state and the next action in four flat rows, without another level of submenus or unreliable native font-weight styling. The Sign out action indicates connection, not quota or fetch success; a failed usage request keeps it available. Linux selection and enabled autostart indicators use text suffixes so provider names retain their alignment. Windows uses native menu check columns for tray selection and Autostart. Linux labels Autostart explicitly as On or Off.
+For X11/XWayland windows, `linux_window.rs` obtains a fresh X server timestamp
+and sends an EWMH activation request. RandR monitor/workarea selection uses the
+actual physical window size and tray coordinates; resize events reapply placement.
+The app prefers X11/XWayland when available; `TOKENKEEPER_BACKEND=wayland` selects
+native Wayland. Native Wayland placement and activation remain compositor controlled.
+X11 dismissal hides and reuses the window, retaining the clipboard connection;
+Wayland dismissal closes the surface. Provider workers and native tray polling
+continue while the popup is hidden. Device codes use Iced's clipboard integration.
+The canvas caches geometry between idle polling ticks, invalidating it on provider
+updates, selection/theme changes, size changes and each minute.
+The production release keeps size optimization (`s`), full LTO, one codegen unit,
+stripping and abort-on-panic.

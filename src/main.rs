@@ -51,6 +51,10 @@ mod desktop_linux;
 #[cfg(target_os = "linux")]
 mod linux_app;
 #[cfg(target_os = "linux")]
+mod linux_panel;
+#[cfg(target_os = "linux")]
+mod linux_window;
+#[cfg(target_os = "linux")]
 mod linux_tray;
 #[cfg(windows)]
 mod popup;

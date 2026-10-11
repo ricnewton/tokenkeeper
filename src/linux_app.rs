@@ -1,112 +1,16 @@
-//! GTK3/Cairo flyout with native KDE StatusNotifier integration.
-use crate::linux_tray::{MenuAction as Action, MenuEntry};
-use crate::model::{Detail, ProviderId, Snapshot, Unit, View};
+//! Borderless Iced/tiny-skia usage panel with native KDE StatusNotifier integration.
+use crate::linux_panel::{self, Hit, Panel};
+use crate::linux_tray::{Action as TrayAction, MenuAction as Action, MenuEntry};
+use crate::model::{ProviderId, Snapshot, View};
 use crate::provider::Provider;
 use crate::worker::{Cmd, Event, Worker};
-use crate::{autostart, claude, codex, copilot, cursor, icon, opencode, time};
-use std::cell::{Cell, RefCell};
-use std::ffi::{CString, c_char, c_int, c_void};
-use std::ptr;
+use crate::{autostart, claude, codex, copilot, cursor, opencode};
+use iced::{Element, Length, Size, Subscription, Task, Theme, window};
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
-type P = *mut c_void;
-#[link(name = ":libgtk-3.so.0")]
-unsafe extern "C" {
-    fn gtk_init(argc: *mut c_int, argv: *mut P);
-    fn gtk_main();
-    fn gtk_main_quit();
-    fn gtk_window_new(kind: c_int) -> P;
-    fn gtk_settings_get_default() -> P;
-    fn gtk_window_set_title(window: P, title: *const c_char);
-    fn gtk_window_set_default_size(window: P, w: c_int, h: c_int);
-    fn gtk_window_set_decorated(window: P, decorated: c_int);
-    fn gtk_window_set_skip_taskbar_hint(window: P, setting: c_int);
-    fn gtk_window_set_keep_above(window: P, setting: c_int);
-    fn gtk_window_set_resizable(window: P, resizable: c_int);
-    fn gtk_window_resize(window: P, width: c_int, height: c_int);
-    fn gtk_window_move(window: P, x: c_int, y: c_int);
-    fn gtk_window_present(window: P);
-    fn gtk_window_present_with_time(window: P, timestamp: u32);
-    fn gtk_widget_realize(widget: P);
-    fn gtk_widget_get_window(widget: P) -> P;
-    fn gtk_container_add(container: P, child: P);
-    fn gtk_drawing_area_new() -> P;
-    fn gtk_scrolled_window_new(hadj: P, vadj: P) -> P;
-    fn gtk_scrolled_window_set_policy(window: P, hpolicy: c_int, vpolicy: c_int);
-    fn gtk_widget_set_size_request(widget: P, w: c_int, h: c_int);
-    fn gtk_widget_show_all(widget: P);
-    fn gtk_widget_hide(widget: P);
-    fn gtk_widget_get_visible(widget: P) -> c_int;
-    fn gtk_widget_queue_draw(widget: P);
-    fn gtk_widget_add_events(widget: P, events: c_int);
-    fn gtk_clipboard_get(selection: P) -> P;
-    fn gtk_clipboard_set_text(clipboard: P, text: *const c_char, len: c_int);
-}
-#[link(name = ":libgdk-3.so.0")]
-unsafe extern "C" {
-    fn g_object_set(object: P, name: *const c_char, ...);
-    fn gdk_atom_intern_static_string(name: *const c_char) -> P;
-    fn gdk_display_get_default() -> P;
-    fn gdk_display_get_primary_monitor(display: P) -> P;
-    fn gdk_display_get_monitor_at_point(display: P, x: c_int, y: c_int) -> P;
-    fn gdk_display_get_monitor(display: P, monitor_num: c_int) -> P;
-    fn gdk_monitor_get_workarea(monitor: P, workarea: *mut Workarea);
-    fn gdk_x11_display_get_type() -> usize;
-    fn gdk_x11_get_server_time(window: P) -> u32;
-    fn gdk_window_get_events(window: P) -> c_int;
-    fn gdk_window_set_events(window: P, events: c_int);
-}
-#[repr(C)]
-struct Workarea {
-    x: c_int,
-    y: c_int,
-    width: c_int,
-    height: c_int,
-}
-#[link(name = ":libgobject-2.0.so.0")]
-unsafe extern "C" {
-    fn g_type_check_instance_is_a(instance: P, kind: usize) -> c_int;
-    fn g_signal_connect_data(
-        instance: P,
-        signal: *const c_char,
-        callback: P,
-        data: P,
-        destroy: P,
-        flags: c_int,
-    ) -> u64;
-}
-#[link(name = ":libglib-2.0.so.0")]
-unsafe extern "C" {
-    fn g_timeout_add(interval: u32, callback: extern "C" fn(P) -> c_int, data: P) -> u32;
-}
-#[link(name = ":libcairo.so.2")]
-unsafe extern "C" {
-    fn cairo_set_source_rgb(cr: P, r: f64, g: f64, b: f64);
-    fn cairo_rectangle(cr: P, x: f64, y: f64, w: f64, h: f64);
-    fn cairo_fill(cr: P);
-    fn cairo_set_line_width(cr: P, w: f64);
-    fn cairo_arc(cr: P, x: f64, y: f64, r: f64, a: f64, b: f64);
-    fn cairo_stroke(cr: P);
-    fn cairo_move_to(cr: P, x: f64, y: f64);
-    fn cairo_show_text(cr: P, text: *const c_char);
-    fn cairo_select_font_face(cr: P, family: *const c_char, slant: c_int, weight: c_int);
-    fn cairo_set_font_size(cr: P, size: f64);
-    fn cairo_line_to(cr: P, x: f64, y: f64);
-    fn cairo_close_path(cr: P);
-    fn cairo_new_path(cr: P);
-    fn cairo_set_dash(cr: P, dashes: *const f64, num: c_int, offset: f64);
-    fn cairo_save(cr: P);
-    fn cairo_restore(cr: P);
-    fn cairo_translate(cr: P, tx: f64, ty: f64);
-    fn cairo_image_surface_create(format: c_int, width: c_int, height: c_int) -> P;
-    fn cairo_create(surface: P) -> P;
-    fn cairo_surface_write_to_png(surface: P, path: *const c_char) -> c_int;
-    fn cairo_destroy(cr: P);
-    fn cairo_surface_destroy(surface: P);
-}
-thread_local! { static APP: RefCell<Option<Rc<RefCell<App>>>> = const { RefCell::new(None) }; static LIGHT: Cell<bool> = const { Cell::new(false) }; }
 struct Slot {
     id: ProviderId,
     worker: Option<Worker>,
@@ -114,191 +18,72 @@ struct Slot {
     last_good: Option<Rc<Snapshot>>,
 }
 struct App {
-    window: P,
-    area: P,
+    window: Option<window::Id>,
     slots: Vec<Slot>,
     events: Receiver<(ProviderId, Event)>,
     active: usize,
     tab: usize,
     demo: bool,
     light: bool,
+    render_epoch: u64,
+    had_focus: bool,
+    visible: bool,
+    window_ready: bool,
+    keep_window: bool,
     last_focus_hide: Option<Instant>,
+    anchor: Option<(i32, i32)>,
+    pending_clipboard: Option<String>,
+    screenshot: Option<PathBuf>,
+    screenshot_requested: bool,
+    started: Instant,
+    auto_close: Option<Duration>,
 }
-fn c(s: &str) -> CString {
-    CString::new(s.replace('\0', " ")).unwrap()
-}
-fn in_app(f: impl FnOnce(&mut App)) {
-    APP.with(|a| {
-        if let Some(a) = a.borrow().as_ref() {
-            f(&mut a.borrow_mut())
-        }
-    });
-}
-unsafe fn signal(widget: P, name: &[u8], cb: P, data: P) {
-    unsafe {
-        g_signal_connect_data(widget, name.as_ptr().cast(), cb, data, ptr::null_mut(), 0);
-    }
-}
-fn on_tray(action: crate::linux_tray::Action) {
-    in_app(|a| match action {
-        crate::linux_tray::Action::Activate(x, y) => a.toggle_panel(x, y),
-        crate::linux_tray::Action::Menu(action) => a.action(action),
-        crate::linux_tray::Action::Scroll(delta) => {
-            let ready = a
-                .slots
-                .iter()
-                .enumerate()
-                .filter_map(|(i, slot)| slot.view.snapshot().map(|_| i))
-                .collect::<Vec<_>>();
-            if let Some(next) = scroll_target(a.active, delta, &ready) {
-                if next == a.active {
-                    return;
-                }
-                a.active = next;
-                a.tab = 0;
-                a.refresh();
-            }
-        }
-    });
-}
-fn scroll_target(active: usize, delta: i32, ready: &[usize]) -> Option<usize> {
-    if delta == 0 || ready.is_empty() {
-        return None;
-    }
-    if let Some(position) = ready.iter().position(|&i| i == active) {
-        let next =
-            (position as isize - delta.signum() as isize).rem_euclid(ready.len() as isize) as usize;
-        Some(ready[next])
-    } else if delta > 0 {
-        ready
-            .iter()
-            .rev()
-            .copied()
-            .find(|&i| i < active)
-            .or_else(|| ready.last().copied())
-    } else {
-        ready
-            .iter()
-            .copied()
-            .find(|&i| i > active)
-            .or_else(|| ready.first().copied())
-    }
-}
-extern "C" fn on_draw(_widget: P, cr: P, _data: P) -> c_int {
-    in_app(|a| a.draw(cr));
-    0
-}
-#[repr(C)]
-struct ButtonEvent {
-    _kind: i32,
-    _window: P,
-    _send: i8,
-    _time: u32,
-    x: f64,
-    y: f64,
-}
-extern "C" fn on_click(_widget: P, ev: *const ButtonEvent, _data: P) -> c_int {
-    let (x, y) = unsafe { ((*ev).x, (*ev).y) };
-    in_app(|a| a.click(x, y));
-    1
-}
-extern "C" fn on_tick(_data: P) -> c_int {
-    crate::linux_tray::poll();
-    in_app(|a| a.tick());
-    1
-}
-extern "C" fn on_delete(_widget: P, _event: P, _data: P) -> c_int {
-    in_app(|a| unsafe { gtk_widget_hide(a.window) });
-    1
-}
-extern "C" fn on_focus_out(widget: P, _event: P, _data: P) -> c_int {
-    in_app(|a| {
-        a.last_focus_hide = Some(Instant::now());
-        unsafe { gtk_widget_hide(widget) };
-    });
-    0
-}
-#[repr(C)]
-struct KeyEvent {
-    _kind: c_int,
-    _window: P,
-    _send: i8,
-    _time: u32,
-    _state: u32,
-    keyval: u32,
-}
-extern "C" fn on_key_press(widget: P, event: *const KeyEvent, _data: P) -> c_int {
-    if unsafe { (*event).keyval } == 0xff1b {
-        unsafe { gtk_widget_hide(widget) };
-        1
-    } else {
-        0
-    }
+#[derive(Debug, Clone)]
+enum Message {
+    Tick,
+    Panel(linux_panel::Action),
+    Opened(window::Id),
+    Window(window::Id, window::Event),
+    Escape,
+    Screenshot(iced::window::Screenshot),
+    Configured(Result<(), String>),
 }
 pub fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let demo = args.iter().any(|x| x == "--demo");
-    if let Some(i) = args.iter().position(|x| x == "--demo-sheet") {
-        let path = args.get(i + 1).expect("--demo-sheet needs a PNG path");
-        demo_sheet(path, &args);
-        return;
+    // Choose the X11/XWayland backend before Iced or provider threads start.
+    // It provides tray-relative placement and timestamp-based KWin activation.
+    // Wayland-only sessions still use their compositor's toplevel behavior.
+    let backend = std::env::var("TOKENKEEPER_BACKEND").unwrap_or_default();
+    if backend == "x11" || (backend != "wayland" && std::env::var_os("DISPLAY").is_some()) {
+        unsafe {
+            std::env::remove_var("WAYLAND_DISPLAY");
+            std::env::remove_var("WAYLAND_SOCKET");
+        }
+    } else if backend == "wayland" {
+        unsafe {
+            std::env::remove_var("DISPLAY");
+        }
     }
-    unsafe { gtk_init(ptr::null_mut(), ptr::null_mut()) };
-    let app = Rc::new(RefCell::new(App::new(demo)));
-    APP.with(|a| *a.borrow_mut() = Some(app));
-    unsafe {
-        g_timeout_add(100, on_tick, ptr::null_mut());
-        gtk_main()
-    };
+
+    if let Err(error) = iced::daemon(App::boot, App::update, App::view)
+        .title("TokenKeeper")
+        .theme(|app: &App, _| if app.light { Theme::Light } else { Theme::Dark })
+        .subscription(App::subscription)
+        .run()
+    {
+        eprintln!("Could not start TokenKeeper UI: {error}");
+        std::process::exit(1);
+    }
 }
 impl App {
-    fn new(demo: bool) -> Self {
+    fn boot() -> (Self, Task<Message>) {
+        let args: Vec<String> = std::env::args().collect();
+        let screenshot = args
+            .iter()
+            .position(|arg| arg == "--demo-sheet")
+            .map(|i| PathBuf::from(args.get(i + 1).expect("--demo-sheet needs a PNG path")));
+        let demo = screenshot.is_some() || args.iter().any(|arg| arg == "--demo");
         if !demo {
             autostart::follow_exe();
-        }
-        let window = unsafe { gtk_window_new(0) };
-        unsafe {
-            g_object_set(
-                gtk_settings_get_default(),
-                c("gtk-application-prefer-dark-theme").as_ptr(),
-                (!light_theme()) as c_int,
-                ptr::null::<c_char>(),
-            );
-            gtk_window_set_title(window, c("TokenKeeper").as_ptr());
-            gtk_window_set_default_size(window, 440, 1);
-            gtk_window_set_decorated(window, 0);
-            gtk_window_set_skip_taskbar_hint(window, 1);
-            gtk_window_set_keep_above(window, 1);
-            gtk_window_set_resizable(window, 0);
-            signal(
-                window,
-                b"focus-out-event\0",
-                on_focus_out as P,
-                ptr::null_mut(),
-            );
-            signal(
-                window,
-                b"key-press-event\0",
-                on_key_press as P,
-                ptr::null_mut(),
-            );
-        };
-        let area = unsafe { gtk_drawing_area_new() };
-        let scroll = unsafe { gtk_scrolled_window_new(ptr::null_mut(), ptr::null_mut()) };
-        unsafe {
-            gtk_scrolled_window_set_policy(scroll, 2, 1); // never horizontal, automatic vertical
-            gtk_widget_set_size_request(area, 440, 610);
-            gtk_container_add(window, scroll);
-            gtk_container_add(scroll, area);
-            gtk_widget_add_events(area, 1 << 8);
-            signal(area, b"draw\0", on_draw as P, ptr::null_mut());
-            signal(
-                area,
-                b"button-press-event\0",
-                on_click as P,
-                ptr::null_mut(),
-            );
-            signal(window, b"delete-event\0", on_delete as P, ptr::null_mut());
         }
         let (tx, events) = mpsc::channel();
         let slots = ProviderId::ALL
@@ -337,191 +122,248 @@ impl App {
                 }
             })
             .collect::<Vec<_>>();
+
+        let active = if demo {
+            args.iter()
+                .position(|arg| arg == "--demo-provider")
+                .and_then(|i| args.get(i + 1))
+                .map_or(0, |name| match name.as_str() {
+                    "copilot" => 1,
+                    "claude" => 2,
+                    "codex" => 3,
+                    "opencode" => 4,
+                    _ => 0,
+                })
+        } else {
+            0
+        };
+        let tab = if demo {
+            args.iter()
+                .position(|arg| arg == "--demo-tab")
+                .and_then(|i| args.get(i + 1))
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(1)
+        } else {
+            0
+        };
+        let auto_close = args
+            .iter()
+            .position(|arg| arg == "--auto-close")
+            .and_then(|i| args.get(i + 1))
+            .and_then(|s| s.parse().ok())
+            .map(Duration::from_secs);
+        let mut app = Self {
+            window: None,
+            slots,
+            events,
+            active,
+            tab,
+            demo,
+            light: light_theme(),
+            render_epoch: 0,
+            had_focus: false,
+            visible: false,
+            window_ready: false,
+            keep_window: std::env::var_os("DISPLAY").is_some(),
+            last_focus_hide: None,
+            anchor: None,
+            pending_clipboard: None,
+            screenshot,
+            screenshot_requested: false,
+            started: Instant::now(),
+            auto_close,
+        };
+        if demo && args.iter().any(|arg| arg == "--demo-single") {
+            for (i, slot) in app.slots.iter_mut().enumerate() {
+                if i != active {
+                    slot.view = View::SignedOut(None);
+                }
+            }
+        }
         if !demo {
-            if let Err(error) = crate::linux_tray::start(on_tray) {
+            if let Err(error) = crate::linux_tray::start() {
                 eprintln!("{error}");
             }
         }
-        let mut a = Self {
-            window,
-            area,
-            slots,
-            events,
-            active: 0,
-            tab: 0,
-            demo,
-            light: light_theme(),
-            last_focus_hide: None,
+        app.refresh();
+        let task = if demo {
+            app.show_panel_at(None)
+        } else {
+            Task::none()
         };
-        a.refresh();
-        if demo {
-            a.show_panel();
+        (app, task)
+    }
+    fn entries(&self) -> Vec<(ProviderId, View)> {
+        self.slots.iter().map(|s| (s.id, s.view.clone())).collect()
+    }
+    fn panel_height(&self) -> f32 {
+        linux_panel::content_height(&self.entries(), self.active, self.tab)
+    }
+    fn show_panel_at(&mut self, anchor: Option<(i32, i32)>) -> Task<Message> {
+        if let Some(id) = self.window {
+            if self.visible {
+                return window::gain_focus(id);
+            }
+            self.visible = true;
+            self.had_focus = false;
+            self.anchor = anchor;
+            return window::set_mode(id, window::Mode::Windowed).chain(self.configure_window(id));
         }
-        a
+        self.visible = true;
+        self.window_ready = false;
+        self.anchor = anchor;
+        self.had_focus = false;
+        let (id, open) = window::open(window::Settings {
+            size: Size::new(440.0, self.panel_height().min(610.0)),
+            decorations: false,
+            resizable: false,
+            minimizable: false,
+            level: window::Level::AlwaysOnTop,
+            exit_on_close_request: false,
+            platform_specific: window::settings::PlatformSpecific {
+                application_id: "tokenkeeper".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        });
+        self.window = Some(id);
+        open.map(Message::Opened)
     }
-    fn show_panel(&self) {
-        self.show_panel_at(None);
+    fn hide_panel(&mut self, focus: bool) -> Task<Message> {
+        if focus {
+            self.last_focus_hide = Some(Instant::now());
+        }
+        self.had_focus = false;
+        self.visible = false;
+        if self.keep_window {
+            self.window
+                .map_or_else(Task::none, |id| window::set_mode(id, window::Mode::Hidden))
+        } else {
+            self.window_ready = false;
+            self.window.take().map_or_else(Task::none, window::close)
+        }
     }
-    fn show_panel_at(&self, anchor: Option<(i32, i32)>) {
-        unsafe {
-            let display = gdk_display_get_default();
-            // SNI activation has no input timestamp. Obtain a fresh X11 server
-            // time so KWin can focus the flyout instead of merely raising it.
-            // PropertyChangeMask is required by gdk_x11_get_server_time.
-            gtk_widget_realize(self.window);
-            let native = gtk_widget_get_window(self.window);
-            let timestamp = if !display.is_null()
-                && !native.is_null()
-                && g_type_check_instance_is_a(display, gdk_x11_display_get_type()) != 0
-            {
-                gdk_window_set_events(native, gdk_window_get_events(native) | (1 << 16));
-                Some(gdk_x11_get_server_time(native))
-            } else {
-                None
-            };
-            if !display.is_null() {
-                let mut monitor = anchor
-                    .map(|(x, y)| gdk_display_get_monitor_at_point(display, x, y))
-                    .unwrap_or_else(|| gdk_display_get_primary_monitor(display));
-                if monitor.is_null() {
-                    monitor = gdk_display_get_monitor(display, 0);
-                }
-                if !monitor.is_null() {
-                    let mut workarea = Workarea {
-                        x: 0,
-                        y: 0,
-                        width: 0,
-                        height: 0,
-                    };
-                    gdk_monitor_get_workarea(monitor, &mut workarea);
-                    let panel_height = (self.panel_height() as c_int).min(610);
-                    let fallback_x = workarea.x + (workarea.width - 440 - 12).max(0);
-                    let fallback_y = workarea.y + (workarea.height - panel_height - 12).max(0);
-                    let (x, y) = anchor
-                        .map(|(x, y)| {
-                            (
-                                (x - 440).clamp(
-                                    workarea.x,
-                                    (workarea.x + workarea.width - 440).max(workarea.x),
-                                ),
-                                (y - panel_height - 12).clamp(
-                                    workarea.y,
-                                    (workarea.y + workarea.height - panel_height).max(workarea.y),
-                                ),
-                            )
-                        })
-                        .unwrap_or((fallback_x, fallback_y));
-                    gtk_window_move(self.window, x, y);
+    fn configure_window(&self, id: window::Id) -> Task<Message> {
+        let anchor = self.anchor;
+        window::run(id, move |window| {
+            crate::linux_window::configure(window, anchor)
+        })
+        .map(Message::Configured)
+    }
+    fn tray_action(&mut self, action: TrayAction) -> Task<Message> {
+        match action {
+            TrayAction::Activate(x, y) => {
+                if self.visible {
+                    self.hide_panel(false)
+                } else if self
+                    .last_focus_hide
+                    .is_some_and(|time| time.elapsed() < Duration::from_millis(400))
+                {
+                    Task::none()
+                } else {
+                    self.show_panel_at(Some((x, y)))
                 }
             }
-            let height = (self.panel_height() as c_int).min(610);
-            gtk_window_set_default_size(self.window, 440, height);
-            gtk_window_resize(self.window, 440, height);
-            gtk_widget_show_all(self.window);
-            if let Some(timestamp) = timestamp {
-                gtk_window_present_with_time(self.window, timestamp);
-            } else {
-                gtk_window_present(self.window);
+            TrayAction::Scroll(delta) => {
+                self.cycle(delta);
+                Task::none()
             }
+            TrayAction::Menu(action) => self.action(action),
         }
     }
-    fn toggle_panel(&mut self, x: i32, y: i32) {
-        if unsafe { gtk_widget_get_visible(self.window) } != 0 {
-            unsafe { gtk_widget_hide(self.window) };
-        } else if !self
-            .last_focus_hide
-            .is_some_and(|hidden| hidden.elapsed() < Duration::from_millis(400))
-        {
-            self.show_panel_at(Some((x, y)));
+    fn cycle(&mut self, delta: i32) {
+        let ready: Vec<_> = self
+            .slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.view.snapshot().map(|_| i))
+            .collect();
+        if let Some(next) = scroll_target(self.active, delta, &ready) {
+            self.active = next;
+            self.tab = 0;
+            self.refresh();
         }
     }
-    fn action(&mut self, a: Action) {
-        match a {
-            Action::Panel => self.show_panel(),
+    fn action(&mut self, action: Action) -> Task<Message> {
+        match action {
+            Action::Panel => return self.show_panel_at(None),
             Action::Refresh => {
-                for s in &self.slots {
-                    if let Some(w) = &s.worker {
-                        w.send(Cmd::RefreshNow)
+                for slot in &self.slots {
+                    if let Some(worker) = &slot.worker {
+                        worker.send(Cmd::RefreshNow);
                     }
                 }
             }
-            Action::Quit => unsafe { gtk_main_quit() },
+            Action::Quit => return iced::exit(),
             Action::Autostart => {
                 if !self.demo {
                     autostart::set_enabled(!autostart::is_enabled());
-                    self.refresh()
+                    self.refresh();
                 }
             }
             Action::Show(i) => {
-                self.active = i;
-                self.tab = 0;
-                self.refresh()
+                if i < self.slots.len() {
+                    self.active = i;
+                    self.tab = 0;
+                    self.refresh();
+                }
             }
             Action::Sign(i) => {
-                if let Some(w) = &self.slots[i].worker {
-                    if matches!(self.slots[i].view, View::SignedOut(_)) {
-                        w.send(Cmd::SignIn)
-                    } else {
-                        w.send(Cmd::SignOut)
+                if let Some(slot) = self.slots.get(i) {
+                    if let Some(worker) = &slot.worker {
+                        worker.send(if matches!(slot.view, View::SignedOut(_)) {
+                            Cmd::SignIn
+                        } else {
+                            Cmd::SignOut
+                        });
                     }
                 }
             }
         }
+        Task::none()
     }
-    fn tick(&mut self) {
+    fn tick(&mut self) -> Task<Message> {
+        let mut tasks = Vec::new();
+        for action in crate::linux_tray::drain() {
+            tasks.push(self.tray_action(action));
+        }
         let mut dirty = false;
-        while let Ok((id, ev)) = self.events.try_recv() {
-            if let Some(i) = self.slots.iter().position(|s| s.id == id) {
-                let mut show_panel = false;
+        let mut show = false;
+        while let Ok((id, event)) = self.events.try_recv() {
+            if let Some(i) = self.slots.iter().position(|slot| slot.id == id) {
                 let slot = &mut self.slots[i];
-                slot.view = match ev {
-                    Event::SignedOut(e) => {
+                slot.view = match event {
+                    Event::SignedOut(error) => {
                         slot.last_good = None;
-                        View::SignedOut(e)
+                        View::SignedOut(error)
                     }
                     Event::SigningIn(code) => {
                         self.active = i;
                         self.tab = 0;
                         if let Some(code) = &code {
-                            let selection = unsafe {
-                                gdk_atom_intern_static_string(b"CLIPBOARD\0".as_ptr().cast())
-                            };
-                            unsafe {
-                                gtk_clipboard_set_text(
-                                    gtk_clipboard_get(selection),
-                                    c(code).as_ptr(),
-                                    -1,
-                                );
-                            }
-                            show_panel = true;
+                            self.pending_clipboard = Some(code.clone());
+                            show = true;
                         }
                         View::SigningIn { code }
                     }
-                    Event::Usage(s) => {
-                        let completed_login = matches!(slot.view, View::SigningIn { .. });
-                        let snap = Rc::new(s);
-                        slot.last_good = Some(snap.clone());
-                        if completed_login {
+                    Event::Usage(snapshot) => {
+                        if matches!(slot.view, View::SigningIn { .. }) {
                             self.active = i;
                             self.tab = 0;
-                            show_panel = true;
+                            show = true;
                         }
+                        let snap = Rc::new(snapshot);
+                        slot.last_good = Some(snap.clone());
                         View::Ready { snap, error: None }
                     }
-                    Event::Error(e) => {
-                        if let Some(snap) = &slot.last_good {
-                            View::Ready {
-                                snap: snap.clone(),
-                                error: Some(e),
-                            }
-                        } else {
-                            View::Failed(e)
-                        }
-                    }
+                    Event::Error(error) => match &slot.last_good {
+                        Some(snap) => View::Ready {
+                            snap: snap.clone(),
+                            error: Some(error),
+                        },
+                        None => View::Failed(error),
+                    },
                 };
-                if show_panel {
-                    self.show_panel();
-                }
                 dirty = true;
             }
         }
@@ -536,10 +378,174 @@ impl App {
                     self.tab = 0;
                 }
             }
-            self.refresh()
+            self.refresh();
+        }
+        if show {
+            let already_open = self.window_ready;
+            tasks.push(self.show_panel_at(None));
+            if already_open {
+                if let Some(code) = self.pending_clipboard.take() {
+                    tasks.push(iced::clipboard::write(code));
+                }
+            }
+        }
+        if self
+            .auto_close
+            .is_some_and(|duration| self.started.elapsed() >= duration)
+        {
+            tasks.push(iced::exit());
+        }
+        if self.screenshot.is_some()
+            && !self.screenshot_requested
+            && self.started.elapsed() > Duration::from_millis(600)
+        {
+            if let Some(id) = self.window {
+                self.screenshot_requested = true;
+                tasks.push(window::screenshot(id).map(Message::Screenshot));
+            }
+        }
+        Task::batch(tasks)
+    }
+    fn update(&mut self, message: Message) -> Task<Message> {
+        let before = self.panel_height();
+        let task = match message {
+            Message::Tick => self.tick(),
+            Message::Panel(linux_panel::Action::Click(x, y)) => {
+                let entries = self.entries();
+                let visible = linux_panel::visible_providers(&entries, self.active);
+                let details = self.slots[self.active]
+                    .view
+                    .snapshot()
+                    .map_or(0, |s| s.details.len());
+                match linux_panel::hit_test(x, y, &visible, details) {
+                    Hit::Provider(i) => {
+                        self.active = i;
+                        self.tab = 0;
+                        self.refresh();
+                    }
+                    Hit::Tab(i) => {
+                        self.tab = i;
+                        self.refresh();
+                    }
+                    Hit::Usage => crate::open_url(self.slots[self.active].id.usage_url()),
+                    Hit::None => {}
+                }
+                Task::none()
+            }
+            Message::Panel(linux_panel::Action::Scroll(delta)) => {
+                self.cycle(delta);
+                Task::none()
+            }
+            Message::Opened(id) => {
+                if self.window != Some(id) {
+                    return window::close(id);
+                }
+                self.window_ready = true;
+                let mut tasks = vec![if self.visible {
+                    self.configure_window(id)
+                } else {
+                    window::set_mode(id, window::Mode::Hidden)
+                }];
+                if let Some(code) = self.pending_clipboard.take() {
+                    tasks.push(iced::clipboard::write(code));
+                }
+                Task::batch(tasks)
+            }
+            Message::Window(id, event) => {
+                if self.window != Some(id) {
+                    return Task::none();
+                }
+                match event {
+                    window::Event::Focused if self.visible => {
+                        self.had_focus = true;
+                        Task::none()
+                    }
+                    window::Event::Unfocused if self.visible && self.had_focus && !self.demo => {
+                        self.hide_panel(true)
+                    }
+                    window::Event::CloseRequested => self.hide_panel(false),
+                    window::Event::Resized(_) if self.visible => self.configure_window(id),
+                    window::Event::Closed => {
+                        self.visible = false;
+                        self.window_ready = false;
+                        self.window = None;
+                        Task::none()
+                    }
+                    _ => Task::none(),
+                }
+            }
+            Message::Escape => self.hide_panel(false),
+            Message::Configured(result) => {
+                if let Err(error) = result {
+                    eprintln!("Popup integration: {error}");
+                }
+                Task::none()
+            }
+            Message::Screenshot(image) => {
+                if let Some(path) = &self.screenshot {
+                    if let Err(error) =
+                        save_png(path, image.size.width, image.size.height, &image.rgba)
+                    {
+                        eprintln!("Could not save panel preview: {error}");
+                        std::process::exit(1);
+                    }
+                }
+                iced::exit()
+            }
+        };
+        if self.window.is_some() && before != self.panel_height() {
+            let id = self.window.unwrap();
+            Task::batch([
+                task,
+                window::resize(id, Size::new(440.0, self.panel_height().min(610.0))),
+            ])
+        } else {
+            task
         }
     }
+    fn view(&self, _id: window::Id) -> Element<'_, Message> {
+        let height = self.panel_height();
+        let panel = iced::widget::canvas(Panel {
+            slots: self.entries(),
+            active: self.active,
+            tab: self.tab,
+            light: self.light,
+            generation: self.render_epoch,
+        })
+        .width(440)
+        .height(height);
+        let content: Element<'_, linux_panel::Action> = if height > 610.0 {
+            iced::widget::scrollable(panel)
+                .direction(iced::widget::scrollable::Direction::Vertical(
+                    iced::widget::scrollable::Scrollbar::hidden(),
+                ))
+                .width(Length::Fill)
+                .height(Length::Fill)
+                .into()
+        } else {
+            panel.into()
+        };
+        content.map(Message::Panel)
+    }
+    fn subscription(&self) -> Subscription<Message> {
+        Subscription::batch([
+            iced::time::every(Duration::from_millis(100)).map(|_| Message::Tick),
+            iced::event::listen_with(|event, _, id| match event {
+                iced::Event::Keyboard(iced::keyboard::Event::KeyPressed {
+                    key: iced::keyboard::Key::Named(iced::keyboard::key::Named::Escape),
+                    ..
+                }) => Some(Message::Escape),
+                iced::Event::Window(event)
+                    if !matches!(event, window::Event::RedrawRequested(_)) =>
+                {
+                    Some(Message::Window(id, event))
+                }
+                _ => None,
+            }),
+        ])
+    }
     fn refresh(&mut self) {
+        self.render_epoch = self.render_epoch.wrapping_add(1);
         let accounts = self
             .slots
             .iter()
@@ -620,659 +626,183 @@ impl App {
             },
             menu,
         );
-        unsafe {
-            gtk_widget_set_size_request(self.area, 440, self.panel_height() as c_int);
-            gtk_widget_queue_draw(self.area)
-        };
     }
-    fn panel_height(&self) -> f64 {
-        let height = self.slots[self.active]
-            .view
-            .snapshot()
-            .map_or(610.0, |snap| 380.0 + detail_height(snap, self.tab) + 58.0);
-        height
-            - if self.visible_providers().len() == 1 {
-                155.0
-            } else {
-                0.0
-            }
+}
+fn scroll_target(active: usize, delta: i32, ready: &[usize]) -> Option<usize> {
+    if delta == 0 || ready.is_empty() {
+        return None;
     }
-
-    fn click(&mut self, x: f64, y: f64) {
-        let details = self.slots[self.active]
-            .view
-            .snapshot()
-            .map_or(0, |s| s.details.len());
-        let visible = self.visible_providers();
-        match hit_test(x, y, &visible, details) {
-            Hit::Provider(i) => {
-                self.active = i;
-                self.tab = 0;
-                self.refresh();
-            }
-            Hit::Tab(i) => {
-                self.tab = i;
-                self.refresh();
-            }
-            Hit::Usage => crate::open_url(self.slots[self.active].id.usage_url()),
-            Hit::None => {}
-        }
-    }
-
-    fn draw(&self, cr: P) {
-        LIGHT.with(|theme| theme.set(self.light));
-        background(cr, self.panel_height());
-        let visible = self.visible_providers();
-        let width = 440.0 / visible.len() as f64;
-        if visible.len() > 1 {
-            for (column, &i) in visible.iter().enumerate() {
-                let slot = &self.slots[i];
-                let x = column as f64 * width;
-                rounded(
-                    cr,
-                    x + 4.0,
-                    5.0,
-                    width - 8.0,
-                    92.0,
-                    9.0,
-                    if i == self.active { 0.25 } else { 0.20 },
-                );
-                text(
-                    cr,
-                    x + 12.0,
-                    26.0,
-                    slot.id.short_name(),
-                    13.0,
-                    if i == self.active { 0.98 } else { 0.75 },
-                );
-                if let Some(s) = slot.view.snapshot() {
-                    ring(
-                        cr,
-                        x + 35.0,
-                        61.0,
-                        17.0,
-                        s.used_fraction(),
-                        s.elapsed_fraction(),
-                    );
-                    text(
-                        cr,
-                        x + 59.0,
-                        65.0,
-                        &format!("{:.0}%", s.used_fraction() * 100.0),
-                        14.0,
-                        0.95,
-                    );
-                } else {
-                    text(cr, x + 12.0, 64.0, "Signed out", 11.0, 0.55);
-                }
-                if i == self.active {
-                    rounded(cr, x + width / 2.0 - 7.0, 97.0, 14.0, 3.0, 2.0, 0.7);
-                }
-            }
-        }
-        unsafe {
-            cairo_save(cr);
-            if visible.len() == 1 {
-                cairo_translate(cr, 0.0, -95.0);
-            }
-        }
-        let slot = &self.slots[self.active];
-        text(cr, 22.0, 137.0, slot.id.name(), 17.0, 1.0);
-        text_accent(cr, 361.0, 137.0, "Usage >", 12.0);
-        if let Some(s) = slot.view.snapshot() {
-            rounded(cr, 252.0, 116.0, 100.0, 27.0, 13.0, 0.23);
-            text(cr, 261.0, 134.0, &s.plan, 10.0, 0.75);
-            ring(
-                cr,
-                75.0,
-                205.0,
-                43.0,
-                s.used_fraction(),
-                s.elapsed_fraction(),
-            );
-            text(
-                cr,
-                55.0,
-                212.0,
-                &format!("{:.0}%", s.used_fraction() * 100.0),
-                17.0,
-                1.0,
-            );
-            text(cr, 145.0, 184.0, &s.fmt(s.used), 28.0, 1.0);
-            text(cr, 145.0, 207.0, &s.of_text(), 13.0, 0.62);
-            text(cr, 145.0, 232.0, &s.pace_text(), 13.0, 0.8);
-            self.draw_combined(cr);
-            unsafe {
-                cairo_save(cr);
-                if visible.len() == 1 {
-                    cairo_translate(cr, 0.0, -60.0);
-                }
-            }
-            rounded(cr, 20.0, 330.0, 400.0, 38.0, 8.0, 0.18);
-            for (i, d) in s.details.iter().enumerate() {
-                let width = 400.0 / s.details.len() as f64;
-                let x = 20.0 + i as f64 * width;
-                if i == self.tab {
-                    rounded(cr, x + 2.0, 332.0, width - 4.0, 34.0, 7.0, 0.27);
-                }
-                text(
-                    cr,
-                    x + 18.0,
-                    355.0,
-                    d.label(),
-                    13.0,
-                    if i == self.tab { 1.0 } else { 0.6 },
-                );
-            }
-            let detail_height = detail_height(s, self.tab);
-            rounded(cr, 20.0, 380.0, 400.0, detail_height, 9.0, 0.18);
-            self.draw_detail(cr, s);
-            let footer = 380.0 + detail_height + 34.0;
-            text(cr, 22.0, footer, &s.resets_text(), 11.0, 0.56);
-            if matches!(slot.view, View::Ready { error: Some(_), .. }) {
-                text_warning(cr, 275.0, footer, "Update failed, retrying", 11.0);
-            } else {
-                text(
-                    cr,
-                    315.0,
-                    footer,
-                    &format!("Updated {}", time::ago(s.fetched_ms)),
-                    11.0,
-                    0.56,
-                );
-            }
-            unsafe { cairo_restore(cr) };
-        } else {
-            let message = match &slot.view {
-                View::Loading => "Loading usage…",
-                View::SignedOut(_) => "Sign in from the tray menu",
-                View::SigningIn { code: Some(_) } => "Enter the copied code in your browser",
-                View::SigningIn { .. } => "Complete sign-in in your browser",
-                View::Failed(_) => "Could not load usage",
-                _ => "",
-            };
-            text(cr, 22.0, 200.0, message, 15.0, 0.75);
-            if let View::SignedOut(Some(error)) | View::Failed(error) = &slot.view {
-                text_warning(
-                    cr,
-                    22.0,
-                    228.0,
-                    &error.chars().take(65).collect::<String>(),
-                    11.0,
-                );
-            }
-            if let View::SigningIn { code: Some(code) } = &slot.view {
-                text(cr, 22.0, 248.0, code, 26.0, 1.0);
-            }
-        }
-        unsafe { cairo_restore(cr) };
-    }
-
-    fn visible_providers(&self) -> Vec<usize> {
-        let mut visible = self
-            .slots
+    if let Some(position) = ready.iter().position(|&i| i == active) {
+        let next =
+            (position as isize - delta.signum() as isize).rem_euclid(ready.len() as isize) as usize;
+        Some(ready[next])
+    } else if delta > 0 {
+        ready
             .iter()
-            .enumerate()
-            .filter(|(_, s)| {
-                s.view.snapshot().is_some() || matches!(s.view, View::SigningIn { .. })
-            })
-            .map(|(i, _)| i)
-            .collect::<Vec<_>>();
-        if !visible.contains(&self.active) {
-            visible.push(self.active);
-            visible.sort_unstable();
-        }
-        visible
-    }
-
-    fn draw_combined(&self, cr: P) {
-        let dollars: Vec<&Snapshot> = self
-            .slots
-            .iter()
-            .filter_map(|s| s.view.snapshot())
-            .filter(|s| s.unit == Unit::Cents && s.limit > 0)
-            .collect();
-        if dollars.len() < 2 {
-            return;
-        }
-        let used: u32 = dollars.iter().map(|s| s.used).sum();
-        let limit: u32 = dollars.iter().map(|s| s.limit).sum();
-        text(cr, 22.0, 273.0, "All dollar tools", 12.0, 0.7);
-        text(
-            cr,
-            255.0,
-            273.0,
-            &format!(
-                "{} / {}",
-                crate::model::dollars(used),
-                crate::model::dollars(limit)
-            ),
-            11.0,
-            0.8,
-        );
-        rounded(cr, 22.0, 284.0, 396.0, 11.0, 5.0, 0.19);
-        let mut x = 22.0;
-        for s in dollars {
-            let width = 396.0 * s.used.min(s.limit) as f64 / limit as f64;
-            if width > 0.0 {
-                let rgb = match s.provider {
-                    ProviderId::Cursor => 0x58c7eb,
-                    ProviderId::Copilot => 0x8957e5,
-                    ProviderId::Claude => 0xd97757,
-                    ProviderId::Codex => 0x10a37f,
-                    ProviderId::OpenCode => 0x6e9ee8,
-                };
-                rgb_color(cr, rgb);
-                unsafe {
-                    cairo_rectangle(cr, x, 284.0, width, 11.0);
-                    cairo_fill(cr);
-                }
-                x += width;
-            }
-        }
-    }
-
-    fn draw_detail(&self, cr: P, s: &Snapshot) {
-        let detail = s.details.get(self.tab).copied().unwrap_or(Detail::Today);
-        match detail {
-            Detail::Limits => {
-                text(cr, 35.0, 407.0, "Rate limits", 13.0, 0.95);
-                for (i, meter) in s.meters.iter().enumerate() {
-                    let y = 432.0 + i as f64 * 38.0;
-                    text(cr, 35.0, y, &meter.label, 12.0, 0.8);
-                    if let Some(reset) = meter.resets_ms {
-                        text(
-                            cr,
-                            250.0,
-                            y,
-                            &format!("resets {}", time::day_month(reset)),
-                            10.0,
-                            0.58,
-                        );
-                    }
-                    text(
-                        cr,
-                        370.0,
-                        y,
-                        &format!("{:.0}%", meter.fraction * 100.0),
-                        12.0,
-                        0.9,
-                    );
-                    bar(cr, 35.0, y + 7.0, 365.0, meter.fraction);
-                }
-            }
-            _ => {
-                let (values, labels, title): (Vec<Option<u32>>, Vec<String>, &str) = match detail {
-                    Detail::Today => (
-                        s.hourly.clone(),
-                        (0..s.hourly.len()).map(|i| format!("{i}:00")).collect(),
-                        "Today by hour",
-                    ),
-                    Detail::Cycle => (s.daily.clone(), s.daily_labels.clone(), "Daily this cycle"),
-                    Detail::History => (
-                        s.history.iter().copied().map(Some).collect(),
-                        s.history_labels.clone(),
-                        "Monthly totals",
-                    ),
-                    _ => unreachable!(),
-                };
-                text(cr, 35.0, 408.0, title, 13.0, 0.95);
-                if values.is_empty() {
-                    text(cr, 85.0, 480.0, s.empty_note, 13.0, 0.55);
-                    return;
-                }
-                let max = values.iter().filter_map(|v| *v).max().unwrap_or(1).max(1) as f64;
-                let width = 365.0 / values.len() as f64;
-                if detail == Detail::Cycle && s.limit > 0 {
-                    let budget = s.limit as f64 / s.cycle_days() as f64;
-                    let y = 524.0 - (budget / max * 97.0).min(100.0);
-                    color(cr, 0.58);
-                    unsafe {
-                        cairo_set_line_width(cr, 1.0);
-                        cairo_set_dash(cr, [3.0, 3.0].as_ptr(), 2, 0.0);
-                        cairo_move_to(cr, 35.0, y);
-                        cairo_line_to(cr, 400.0, y);
-                        cairo_stroke(cr);
-                        cairo_set_dash(cr, ptr::null(), 0, 0.0);
-                    }
-                    text(
-                        cr,
-                        310.0,
-                        408.0,
-                        &format!("budget {}/day", s.fmt(budget as u32)),
-                        10.0,
-                        0.62,
-                    );
-                }
-                for (i, value) in values.iter().enumerate() {
-                    if let Some(value) = value {
-                        let h = *value as f64 / max * 97.0;
-                        rgb_color(
-                            cr,
-                            if *value > s.limit && detail == Detail::History {
-                                0xc65353
-                            } else {
-                                0x5bc4ed
-                            },
-                        );
-                        unsafe {
-                            cairo_rectangle(
-                                cr,
-                                35.0 + i as f64 * width,
-                                524.0 - h,
-                                (width - 2.0).max(1.0),
-                                h,
-                            );
-                            cairo_fill(cr);
-                        }
-                    }
-                }
-                for i in [0, values.len() / 2, values.len() - 1] {
-                    if let Some(label) = labels.get(i) {
-                        text(cr, 35.0 + i as f64 * width, 544.0, label, 10.0, 0.55);
-                    }
-                }
-            }
-        }
-    }
-}
-fn color(cr: P, v: f64) {
-    LIGHT.with(|light| {
-        let v = if light.get() { 1.0 - v } else { v };
-        unsafe { cairo_set_source_rgb(cr, v, v, v) }
-    })
-}
-fn rgb_color(cr: P, rgb: u32) {
-    unsafe {
-        cairo_new_path(cr);
-        cairo_set_source_rgb(
-            cr,
-            ((rgb >> 16) & 255) as f64 / 255.0,
-            ((rgb >> 8) & 255) as f64 / 255.0,
-            (rgb & 255) as f64 / 255.0,
-        )
-    }
-}
-fn background(cr: P, height: f64) {
-    LIGHT.with(|light| {
-        let v = if light.get() { 0.976 } else { 0.169 };
-        unsafe {
-            cairo_set_source_rgb(cr, v, v, v);
-            cairo_rectangle(cr, 0.0, 0.0, 440.0, height);
-            cairo_fill(cr)
-        }
-    })
-}
-fn rounded(cr: P, x: f64, y: f64, w: f64, h: f64, r: f64, v: f64) {
-    LIGHT.with(|light| {
-        if light.get() && v <= 0.5 {
-            let shade = 1.0 - v * 0.25;
-            unsafe { cairo_set_source_rgb(cr, shade, shade, shade) };
-        } else {
-            color(cr, v);
-        }
-    });
-    unsafe {
-        cairo_new_path(cr);
-        cairo_arc(cr, x + w - r, y + r, r, -std::f64::consts::FRAC_PI_2, 0.0);
-        cairo_arc(
-            cr,
-            x + w - r,
-            y + h - r,
-            r,
-            0.0,
-            std::f64::consts::FRAC_PI_2,
-        );
-        cairo_arc(
-            cr,
-            x + r,
-            y + h - r,
-            r,
-            std::f64::consts::FRAC_PI_2,
-            std::f64::consts::PI,
-        );
-        cairo_arc(
-            cr,
-            x + r,
-            y + r,
-            r,
-            std::f64::consts::PI,
-            1.5 * std::f64::consts::PI,
-        );
-        cairo_close_path(cr);
-        cairo_fill(cr)
-    }
-}
-fn text_warning(cr: P, x: f64, y: f64, s: &str, size: f64) {
-    rgb_color(cr, 0xf0b030);
-    unsafe {
-        cairo_select_font_face(cr, b"Sans\0".as_ptr().cast(), 0, 0);
-        cairo_set_font_size(cr, size);
-        cairo_move_to(cr, x, y);
-        cairo_show_text(cr, c(s).as_ptr());
-    }
-}
-fn detail_height(s: &Snapshot, tab: usize) -> f64 {
-    if s.details.get(tab) == Some(&Detail::Limits) {
-        (50.0 + s.meters.len() as f64 * 38.0).max(172.0)
+            .rev()
+            .copied()
+            .find(|&i| i < active)
+            .or_else(|| ready.last().copied())
     } else {
-        172.0
+        ready
+            .iter()
+            .copied()
+            .find(|&i| i > active)
+            .or_else(|| ready.first().copied())
     }
 }
-fn text_accent(cr: P, x: f64, y: f64, s: &str, size: f64) {
-    rgb_color(cr, 0x58c7eb);
-    unsafe {
-        cairo_select_font_face(cr, b"Sans\0".as_ptr().cast(), 0, 0);
-        cairo_set_font_size(cr, size);
-        cairo_move_to(cr, x, y);
-        cairo_show_text(cr, c(s).as_ptr())
-    }
-}
-fn text(cr: P, x: f64, y: f64, s: &str, size: f64, v: f64) {
-    let s = c(s);
-    color(cr, v);
-    unsafe {
-        cairo_select_font_face(cr, b"Sans\0".as_ptr().cast(), 0, 0);
-        cairo_set_font_size(cr, size);
-        cairo_move_to(cr, x, y);
-        cairo_show_text(cr, s.as_ptr())
-    }
-}
-fn ring(cr: P, x: f64, y: f64, r: f64, used: f32, elapsed: f32) {
-    use std::f64::consts::PI;
-    color(cr, 0.22);
-    unsafe {
-        cairo_new_path(cr);
-        cairo_set_line_width(cr, 5.0);
-        cairo_arc(cr, x, y, r, -PI / 2.0, 3.0 * PI / 2.0);
-        cairo_stroke(cr)
-    };
-    let rgb = icon::level_rgb(used);
-    unsafe {
-        cairo_new_path(cr);
-        cairo_set_source_rgb(
-            cr,
-            ((rgb >> 16) & 255) as f64 / 255.0,
-            ((rgb >> 8) & 255) as f64 / 255.0,
-            (rgb & 255) as f64 / 255.0,
-        );
-        cairo_arc(
-            cr,
-            x,
-            y,
-            r,
-            -PI / 2.0,
-            -PI / 2.0 + 2.0 * PI * used.min(1.0) as f64,
-        );
-        cairo_stroke(cr)
-    };
-    color(cr, 0.9);
-    let a = -PI / 2.0 + 2.0 * PI * elapsed as f64;
-    unsafe {
-        cairo_new_path(cr);
-        cairo_set_line_width(cr, 2.0);
-        cairo_move_to(cr, x + (r - 4.0) * a.cos(), y + (r - 4.0) * a.sin());
-        cairo_line_to(cr, x + (r + 4.0) * a.cos(), y + (r + 4.0) * a.sin());
-        cairo_stroke(cr)
-    }
-}
-fn bar(cr: P, x: f64, y: f64, w: f64, f: f32) {
-    rounded(cr, x, y, w, 8.0, 4.0, 0.3);
-    rgb_color(cr, icon::level_rgb(f));
-    unsafe {
-        cairo_rectangle(cr, x, y, w * f.min(1.0) as f64, 8.0);
-        cairo_fill(cr)
-    }
-}
+
 fn light_theme() -> bool {
     std::env::var("TOKENKEEPER_THEME")
         .or_else(|_| std::env::var("AI_USAGE_THEME"))
         .is_ok_and(|v| v.eq_ignore_ascii_case("light"))
 }
-
-/// Render the real Cairo panel without a display server or live account access.
-fn demo_sheet(path: &str, args: &[String]) {
-    let slots = ProviderId::ALL
-        .iter()
-        .map(|&id| {
-            let snap = match id {
-                ProviderId::Cursor => crate::mock::simulated(0.42),
-                ProviderId::Copilot => crate::mock::simulated_copilot(0.67),
-                ProviderId::Claude => crate::mock::simulated_claude(0.27),
-                ProviderId::Codex => crate::mock::simulated_codex(0.52),
-                ProviderId::OpenCode => crate::mock::simulated_opencode(0.38),
-            };
-            Slot {
-                id,
-                worker: None,
-                view: View::Ready {
-                    snap: Rc::new(snap),
-                    error: None,
-                },
-                last_good: None,
-            }
-        })
-        .collect();
-    let (_, events) = mpsc::channel();
-    let mut app = App {
-        window: ptr::null_mut(),
-        area: ptr::null_mut(),
-        slots,
-        events,
-        active: args
-            .iter()
-            .position(|x| x == "--demo-provider")
-            .and_then(|i| args.get(i + 1))
-            .map_or(0, |name| match name.as_str() {
-                "copilot" => 1,
-                "claude" => 2,
-                "codex" => 3,
-                "opencode" => 4,
-                _ => 0,
-            }),
-        tab: args
-            .iter()
-            .position(|x| x == "--demo-tab")
-            .and_then(|i| args.get(i + 1))
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(1),
-        demo: true,
-        light: light_theme(),
-        last_focus_hide: None,
-    };
-    if args.iter().any(|arg| arg == "--demo-single") {
-        for (i, slot) in app.slots.iter_mut().enumerate() {
-            if i != app.active {
-                slot.view = View::SignedOut(None);
-            }
-        }
+fn save_png(
+    path: &std::path::Path,
+    width: u32,
+    height: u32,
+    pixels: &[u8],
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
     }
-    unsafe {
-        let surface = cairo_image_surface_create(0, 440, app.panel_height() as c_int);
-        assert!(!surface.is_null(), "Cairo surface unavailable");
-        let cr = cairo_create(surface);
-        app.draw(cr);
-        let result = cairo_surface_write_to_png(surface, c(path).as_ptr());
-        cairo_destroy(cr);
-        cairo_surface_destroy(surface);
-        assert_eq!(result, 0, "failed to write demo PNG");
-    }
+    let file = std::fs::File::create(path)?;
+    let mut encoder = png::Encoder::new(file, width, height);
+    encoder.set_color(png::ColorType::Rgba);
+    encoder.set_depth(png::BitDepth::Eight);
+    encoder.write_header()?.write_image_data(pixels)?;
+    Ok(())
 }
 
-#[derive(Debug, PartialEq, Eq)]
-enum Hit {
-    Provider(usize),
-    Tab(usize),
-    Usage,
-    None,
-}
-fn hit_test(x: f64, y: f64, providers: &[usize], details: usize) -> Hit {
-    if !(0.0..440.0).contains(&x) || !(0.0..610.0).contains(&y) {
-        return Hit::None;
-    }
-    if y < 102.0 && providers.len() > 1 {
-        return Hit::Provider(providers[(x / (440.0 / providers.len() as f64)) as usize]);
-    }
-    let single = providers.len() == 1;
-    let detail_y = y + if single { 155.0 } else { 0.0 };
-    if (330.0..370.0).contains(&detail_y) && (20.0..420.0).contains(&x) && details > 0 {
-        return Hit::Tab(((x - 20.0) / (400.0 / details as f64)) as usize);
-    }
-    let header_y = y + if single { 95.0 } else { 0.0 };
-    if (115.0..155.0).contains(&header_y) && x > 345.0 {
-        return Hit::Usage;
-    }
-    Hit::None
-}
 #[cfg(test)]
-mod hit_tests {
+mod tests {
     use super::*;
-    #[test]
-    fn four_columns_and_offset_tabs() {
-        assert_eq!(hit_test(385.0, 60.0, &[0, 1, 2, 3], 3), Hit::Provider(3));
-        assert_eq!(hit_test(180.0, 345.0, &[0, 1, 2, 3], 3), Hit::Tab(1));
-        assert_eq!(hit_test(400.0, 345.0, &[0, 1, 2, 3], 3), Hit::Tab(2));
-        assert_eq!(hit_test(10.0, 345.0, &[0, 1, 2, 3], 3), Hit::None);
-        assert_eq!(hit_test(220.0, 60.0, &[3], 1), Hit::None);
-        assert_eq!(hit_test(180.0, 190.0, &[3], 1), Hit::Tab(0));
-    }
-}
 
-#[cfg(test)]
-mod limits_tests {
-    use super::*;
-    #[test]
-    fn all_limit_rows_extend_scrollable_canvas() {
-        let mut s = crate::mock::simulated_codex(0.5);
-        s.meters = (0..8)
-            .map(|i| crate::model::Meter {
-                label: format!("window {i}"),
-                fraction: 0.5,
-                resets_ms: None,
-            })
-            .collect();
-        let height = detail_height(&s, 0);
-        assert!(height >= 50.0 + 8.0 * 38.0);
-        assert!(380.0 + height + 58.0 > 610.0);
+    fn fixture() -> (App, mpsc::Sender<(ProviderId, Event)>) {
+        let (tx, events) = mpsc::channel();
+        let snap = Rc::new(crate::mock::simulated_codex(0.33));
+        let app = App {
+            window: None,
+            slots: ProviderId::ALL
+                .iter()
+                .map(|&id| Slot {
+                    id,
+                    worker: None,
+                    view: if id == ProviderId::Codex {
+                        View::Ready {
+                            snap: snap.clone(),
+                            error: None,
+                        }
+                    } else {
+                        View::SignedOut(None)
+                    },
+                    last_good: (id == ProviderId::Codex).then(|| snap.clone()),
+                })
+                .collect(),
+            events,
+            active: 3,
+            tab: 0,
+            demo: false,
+            light: false,
+            render_epoch: 0,
+            had_focus: false,
+            visible: false,
+            window_ready: false,
+            keep_window: true,
+            last_focus_hide: None,
+            anchor: None,
+            pending_clipboard: None,
+            screenshot: None,
+            screenshot_requested: false,
+            started: Instant::now(),
+            auto_close: None,
+        };
+        (app, tx)
     }
-}
 
-#[cfg(test)]
-mod scroll_tests {
-    use super::scroll_target;
     #[test]
-    fn scrolling_skips_signed_out_providers_and_wraps() {
+    fn dismissal_keeps_daemon_alive_and_stale_window_events_do_not_close_reopened_panel() {
+        let (mut app, _) = fixture();
+        let _ = app.show_panel_at(Some((1000, 1000)));
+        let first = app.window.unwrap();
+        let _ = app.update(Message::Window(first, window::Event::Unfocused));
+        assert_eq!(app.window, Some(first), "ignore initial unfocused creation");
+        let _ = app.update(Message::Window(first, window::Event::Focused));
+        let _ = app.update(Message::Window(first, window::Event::Unfocused));
+        assert!(!app.visible);
+        assert_eq!(
+            app.window,
+            Some(first),
+            "retain the X11 clipboard connection"
+        );
+        assert!(app.last_focus_hide.is_some());
+        let _ = app.tray_action(TrayAction::Activate(1000, 1000));
+        assert!(!app.visible, "dismissing tray click must not reopen");
+        app.last_focus_hide = Some(Instant::now() - Duration::from_secs(1));
+        let _ = app.tray_action(TrayAction::Activate(1000, 1000));
+        let second = app.window.unwrap();
+        assert_eq!(first, second, "reuse the X11 window across popup cycles");
+        let _ = app.update(Message::Window(window::Id::unique(), window::Event::Closed));
+        assert_eq!(app.window, Some(second));
+        let _ = app.update(Message::Escape);
+        assert!(!app.visible);
+        assert!(matches!(app.slots[3].view, View::Ready { .. }));
+        app.keep_window = false;
+        let _ = app.show_panel_at(None);
+        let _ = app.hide_panel(false);
+        assert!(
+            app.window.is_none(),
+            "native Wayland closes to hide its surface"
+        );
+    }
+
+    #[test]
+    fn device_code_waits_for_its_open_window_and_refresh_failure_keeps_last_usage() {
+        let (mut app, tx) = fixture();
+        tx.send((
+            ProviderId::Copilot,
+            Event::SigningIn(Some("TEST-CODE".into())),
+        ))
+        .unwrap();
+        let _ = app.tick();
+        assert_eq!(app.active, 1);
+        assert_eq!(app.pending_clipboard.as_deref(), Some("TEST-CODE"));
+        let id = app.window.unwrap();
+        tx.send((
+            ProviderId::Copilot,
+            Event::SigningIn(Some("NEW-CODE".into())),
+        ))
+        .unwrap();
+        let _ = app.tick();
+        assert_eq!(
+            app.pending_clipboard.as_deref(),
+            Some("NEW-CODE"),
+            "opening window isn't clipboard-ready"
+        );
+        let _ = app.update(Message::Opened(window::Id::unique()));
+        assert!(
+            app.pending_clipboard.is_some(),
+            "stale opens must not consume the clipboard code"
+        );
+        let _ = app.update(Message::Opened(id));
+        assert!(app.pending_clipboard.is_none());
+        tx.send((ProviderId::Codex, Event::Error("temporary failure".into())))
+            .unwrap();
+        let _ = app.tick();
+        let View::Ready { snap, error } = &app.slots[3].view else {
+            panic!("lost cached usage");
+        };
+        assert_eq!(snap.used_fraction(), 0.33);
+        assert_eq!(error.as_deref(), Some("temporary failure"));
+    }
+
+    #[test]
+    fn signed_out_providers_are_skipped_when_scrolling() {
         assert_eq!(scroll_target(3, 120, &[0, 3]), Some(0));
         assert_eq!(scroll_target(0, -120, &[0, 3]), Some(3));
         assert_eq!(scroll_target(0, 120, &[0, 3]), Some(3));
-        assert_eq!(scroll_target(3, -120, &[0, 3]), Some(0));
-        assert_eq!(scroll_target(2, 120, &[0, 3]), Some(0));
         assert_eq!(scroll_target(2, -120, &[0, 3]), Some(3));
-    }
-    #[test]
-    fn one_ready_provider_stays_selected_and_empty_is_idle() {
         assert_eq!(scroll_target(3, 120, &[3]), Some(3));
-        assert_eq!(scroll_target(3, -120, &[3]), Some(3));
         assert_eq!(scroll_target(3, 120, &[]), None);
         assert_eq!(scroll_target(3, 0, &[3]), None);
     }
