@@ -14,12 +14,12 @@ Current Linux/KDE panels, rendered by the app with **sample data**:
 
 | Dark | Light |
 | --- | --- |
-| ![Dark Codex allowance panel](mockups/tokenkeeper-dark.png) | ![Light Codex allowance panel](mockups/tokenkeeper-light.png) |
+| ![Dark Codex allowance panel](screenshots/tokenkeeper-dark.png) | ![Light Codex allowance panel](screenshots/tokenkeeper-light.png) |
 
 Multiple accounts share one panel, with provider selection, available charts and
 an aggregate allowance bar for providers that report dollar amounts:
 
-![Multiple-provider usage panel with sample data](mockups/tokenkeeper-providers.png)
+![Multiple-provider usage panel with sample data](screenshots/tokenkeeper-providers.png)
 
 ## What it does
 

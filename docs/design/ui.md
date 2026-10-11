@@ -1,8 +1,7 @@
 # UI design
 
 Visual references: see [development and screenshots](../howto/development.md).
-The `tokenkeeper-*.png` images in `mockups/` show current Linux panels with sample data;
-older sheets and HTML mockups are historical.
+The `tokenkeeper-*.png` images in `screenshots/` show current Linux panels with sample data.
 
 ## Tray icon (`icon.rs`)
 

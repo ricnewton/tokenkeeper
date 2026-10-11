@@ -3,20 +3,25 @@
 Linux screenshots can be rendered without signing in or opening a desktop window:
 
 ```bash
-target/release/tokenkeeper --demo-sheet /tmp/tokenkeeper-dark.png --demo-provider codex --demo-tab 0 --demo-single
-TOKENKEEPER_THEME=light target/release/tokenkeeper --demo-sheet /tmp/tokenkeeper-light.png --demo-provider codex --demo-tab 0 --demo-single
-target/release/tokenkeeper --demo-sheet /tmp/tokenkeeper-providers.png --demo-provider cursor --demo-tab 1
+mkdir -p .local/previews
+target/release/tokenkeeper --demo-sheet .local/previews/tokenkeeper-dark.png --demo-provider codex --demo-tab 0 --demo-single
+TOKENKEEPER_THEME=light target/release/tokenkeeper --demo-sheet .local/previews/tokenkeeper-light.png --demo-provider codex --demo-tab 0 --demo-single
+target/release/tokenkeeper --demo-sheet .local/previews/tokenkeeper-providers.png --demo-provider cursor --demo-tab 1
 ```
 
 `--demo` opens a sample panel without accessing credentials or changing autostart.
 Windows provides visual previews in both themes:
 
 ```powershell
-.\target\release\tokenkeeper.exe --icon-sheet $env:TEMP\icons.png
-.\target\release\tokenkeeper.exe --popup-sheet $env:TEMP\popups.png
+New-Item -ItemType Directory -Force .local\previews | Out-Null
+.\target\release\tokenkeeper.exe --icon-sheet .local\previews\icons.png
+.\target\release\tokenkeeper.exe --popup-sheet .local\previews\popups.png
 ```
 
 Inspect the generated PNG before relaunching to check layout changes.
+
+Store local previews, downloads, logs and recovery backups under `.local/`,
+which is ignored by Git. Avoid the system temporary directory for these files.
 
 ## Build checks
 

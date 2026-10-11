@@ -47,8 +47,7 @@ The product and executable are now named TokenKeeper (`tokenkeeper.exe` / `token
 1. **Stop the unconditional Claude dump.** `claude.rs` writes every usage response to `debug\claude-usage.json` (`save_debug("claude-usage.json", …)` in `fetch`). It was added to learn the Enterprise shape. Either remove it, or keep it only for unexpected responses as the other providers do.
 2. **Confirm Claude spend units** once some credits have been used (open questions at the end of providers.md). Add a parser test built from the real response.
 3. **Hide the duplicate Claude meter.** When the headline ring is already the extra-usage spend, don't also list "Extra usage this month" on the Limits tab.
-4. **Refresh `mockups/`.** `icon-sheet.png` and `popup-sheet.png` predate the multi-provider work. Regenerate them with `--icon-sheet` and `--popup-sheet`. The sheet's PNG encoder stores data uncompressed, so recompress the files before committing (previously done by re-saving through System.Drawing). `mockups/popup.html` is an early HTML mockup; delete it or label it as historical.
-5. **Debug log.** `debug\log.txt` always records sign-in, sign-out and error events (`worker.rs`); it never records tokens or device codes, and it is capped at 256 KB. Decide whether to keep it on in release builds. It has been useful for remote diagnosis. Keep it free of secrets in future changes.
+4. **Debug log.** `debug\log.txt` always records sign-in, sign-out and error events (`worker.rs`); it never records tokens or device codes, and it is capped at 256 KB. Decide whether to keep it on in release builds. It has been useful for remote diagnosis. Keep it free of secrets in future changes.
 
 ## Release checklist
 
