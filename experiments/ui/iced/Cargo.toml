@@ -1,0 +1,14 @@
+[package]
+name = "ui-iced-prototype"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+iced = { version = "0.14", default-features = false, features = ["tiny-skia", "canvas", "x11", "wayland", "tokio"] }
+png = "0.18"
+
+[profile.release]
+opt-level = "s"
+lto = false
+codegen-units = 16

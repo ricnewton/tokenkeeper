@@ -6,6 +6,7 @@ a size-optimised exe; Linux uses GTK3/Cairo for the popup, with Rust clients for
 
 | Document | Covers |
 | --- | --- |
+| [ui-toolkit-evaluation.md](ui-toolkit-evaluation.md) | Working egui, Iced and GPUI comparisons and KDE/Wayland constraints |
 | [ui.md](ui.md) | Tray icon, hover glance, click panel, menu, interactions |
 | [providers.md](providers.md) | Sign-in and usage endpoints per provider, response quirks |
 | [deployment.md](deployment.md) | Current state, known gaps, release checklist |
