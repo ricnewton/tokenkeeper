@@ -1,6 +1,2 @@
 /target
 /.local/
-
-/linux/target
-
-/experiments/**/target/

@@ -50,6 +50,9 @@ manual dispatch. A single workflow has two jobs from a matrix: Ubuntu 24.04
 and Windows Server 2022. Both run warning-free release tests and builds using
 Rust 1.99.0. Windows builds natively with MSVC so its tests actually run;
 the local GNU cross-check above is an additional compilation check.
+Normal builds restore a Rust cache (`Swatinem/rust-cache`, keyed on
+`Cargo.lock` and the toolchain); only runs on `main` save it. Release builds
+skip the cache and build from scratch.
 
 Open a successful run in the repository's **Actions** tab and download
 `tokenkeeper-win-<branch>-<run>.zip` or `tokenkeeper-linux-<branch>-<run>.tar.gz`,
@@ -69,8 +72,8 @@ works with a private repository on GitHub Free, within its included allowance.
 
 To publish a release, bump `version` in `Cargo.toml` on `main`, push it, then
 run the **Release** workflow from the Actions tab. It reads the version, fails
-if release `v<version>` already exists, runs the same build and tests (by
-calling `build.yml`), then creates tag `v<version>` on that commit and a GitHub
+if release `v<version>` already exists, runs the same build and tests from scratch
+(by calling `build.yml` without the cache), then creates tag `v<version>` on that commit and a GitHub
 release with generated notes and two assets: `tokenkeeper-win-<version>.zip`
 and `tokenkeeper-linux-<version>.tar.gz`. Only the publish job has write
 permission to the repository contents.

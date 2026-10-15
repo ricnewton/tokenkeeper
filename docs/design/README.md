@@ -2,13 +2,13 @@
 
 A Windows and Linux tray app that shows how much of your AI-tool allowance you've
 used: Cursor, GitHub Copilot, Claude Code, ChatGPT Codex and OpenCode Go. Windows ships as
-a size-optimised exe; Linux uses GTK3/Cairo for the popup, with Rust clients for desktop services.
+a size-optimised exe with a native Direct2D popup; Linux uses an Iced software-rendered popup, with Rust clients for desktop services.
 
 | Document | Covers |
 | --- | --- |
-| [ui-toolkit-evaluation.md](ui-toolkit-evaluation.md) | Working egui, Iced and GPUI comparisons and KDE/Wayland constraints |
 | [ui.md](ui.md) | Tray icon, hover glance, click panel, menu, interactions |
 | [providers.md](providers.md) | Sign-in and usage endpoints per provider, response quirks |
+| [linux.md](linux.md) | Why Iced, KDE menu and tooltip limits, X11/Wayland placement |
 | [deployment.md](deployment.md) | Current state, known gaps, release checklist |
 
 For setup and development commands, see the [how-to guides](../howto/setup.md)
@@ -29,7 +29,7 @@ and [screenshot workflow](../howto/development.md).
             UI thread (main.rs)                         worker threads (worker.rs)
  ┌──────────────────────────────────────┐       ┌──────────────────────────────────┐
  │ tray-icon + Win32 message loop       │ Cmd   │ Worker<Cursor>   ─┐              │
- │ App { slots[3], active, glance,      │──────▶│ Worker<Copilot>   ├─ Provider    │
+ │ App { slots, active, glance,         │──────▶│ Worker<Copilot>   ├─ Provider    │
  │       panel, hover state, hook }     │       │ Worker<Claude>   ─┘  trait       │
  │                                      │◀──────│                                  │
  │ popup.rs (Direct2D/DirectWrite)      │ Event │ http.rs (WinHTTP, blocking)      │
@@ -93,7 +93,7 @@ A provider-neutral `Snapshot` contains:
 
 | File | Contents |
 | --- | --- |
-| `{cursor,copilot,claude}-tokens.bin` | DPAPI-encrypted JSON tokens (`crypto.rs`) |
+| `{cursor,copilot,claude,codex,opencode-go}-tokens.bin` | DPAPI-encrypted JSON tokens (`crypto_windows.rs`). Linux keeps these in Secret Service |
 | `{cursor,copilot,claude}-history.json` | Past-cycle totals, plus the tracker's hourly readings |
 | `debug\log.txt` | Timestamped worker events. Starts afresh past 256 KB |
 | `debug\*-error.txt`, `debug\claude-usage.json` | Last unexpected response body for each failure point (see deployment.md) |
@@ -102,17 +102,18 @@ A provider-neutral `Snapshot` contains:
 
 | File | Role |
 | --- | --- |
-| `main.rs` | Platform entry point and `--check-codex` read-only usage command |
+| `main.rs`, `instance.rs` | Platform entry point, `--check-codex` read-only usage command, single-instance lock |
 | `main_windows.rs`, `popup.rs`, `clipboard.rs`, `sheet.rs` | Windows tray, Direct2D panel, clipboard and previews |
 | `linux_tray.rs` | Rust ksni StatusNotifierItem and native menus, ARGB icons, activation, wheel and hover summary |
-| `linux_app.rs` | GTK3/Cairo flyout, direct KDE tray integration, menu and demo rendering |
+| `linux_app.rs`, `linux_panel.rs`, `linux_window.rs` | Iced app and daemon loop, custom panel rendering, X11 placement and activation hints |
 | `worker.rs`, `provider.rs`, `model.rs` | Shared polling/sign-in worker, provider traits and UI snapshots |
 | `cursor.rs`, `copilot.rs`, `claude.rs`, `codex.rs`, `opencode.rs` | Shared provider implementations; ChatGPT and OpenCode use browser authorization and supplier HTTPS endpoints |
 | `tracker.rs`, `mock.rs`, `icon.rs` | Usage histories, demo snapshots and ring renderer |
 | `http_windows.rs`, `crypto_windows.rs`, `store_windows.rs`, `time_windows.rs`, `autostart_windows.rs` | Windows WinHTTP, CNG/DPAPI, AppData, calendar and Run key |
-| `http_linux.rs`, `crypto_linux.rs`, `store_linux.rs`, `time_linux.rs`, `autostart_linux.rs` | Linux ureq/rustls, RustCrypto/OS RNG, Rust Secret Service and XDG paths |
+| `http_linux.rs`, `crypto_linux.rs`, `store_linux.rs`, `time_linux.rs`, `autostart_linux.rs`, `desktop_linux.rs` | Linux ureq/rustls, RustCrypto/OS RNG, Rust Secret Service, XDG paths and portal browser launching |
+| `build.rs` | Windows version resource and exe icon |
 
-The older architecture examples above describe the Windows host. On Linux, the GTK loop polls the same worker-event channel rather than receiving `WM_WORKER_EVENT`. See [ui.md](ui.md) for the deliberate Linux interaction differences and [providers.md](providers.md) for the Codex account contract.
+The older architecture examples above describe the Windows host. On Linux, the Iced loop polls the same worker-event channel rather than receiving `WM_WORKER_EVENT`. See [ui.md](ui.md) and [linux.md](linux.md) for the deliberate Linux interaction differences and [providers.md](providers.md) for the Codex account contract.
 
 ## Building and dev tools
 

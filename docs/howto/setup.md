@@ -32,7 +32,7 @@ such as KWallet's Secret Service integration, is required to save credentials.
 The desktop must provide StatusNotifier tray support and an XDG OpenURI portal
 (KDE normally supplies these). The app talks to these services directly through
 Rust D-Bus clients; libsecret, libdbusmenu, curl, OpenSSL and xdg-utils are not
-app runtime requirements. GTK3, Cairo and GIO are also no longer required. Existing saved accounts remain compatible.
+app runtime requirements. GTK3, Cairo and GIO are not required either.
 
 With Rust installed:
 

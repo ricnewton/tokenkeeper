@@ -1,6 +1,6 @@
 # Deployment readiness and handover
 
-## Current state (11 Oct 2026)
+## Current state (15 Oct 2026)
 
 | Area | Status |
 | --- | --- |
@@ -10,9 +10,9 @@
 | Multi-provider UI | Column glance and panel, active-provider switching by menu and mouse wheel, per-provider sign in/out |
 | ChatGPT Codex | Browser sign-in, secure credential persistence and direct usage reads verified on Linux/KDE |
 | OpenCode Go | User verified browser device sign-in and Console quota reads with a live subscription on Linux/KDE |
-| Linux/KDE | Native StatusNotifier tray; Iced software-rendered panel, GTK/Cairo removed; X11/XWayland tray activation/reopening checked; visual click-away review remains pending |
-| Tests | 53 release tests pass (2 optional desktop checks skipped), covering providers, persistence, popup lifecycle, clipboard readiness and monitor geometry; warning-free Linux release and Windows cross-check |
-| Windows follow-up | Runtime testing of the port remains pending; compilation has passed |
+| Linux/KDE | Native StatusNotifier tray and Iced software-rendered panel (see linux.md); X11/XWayland tray activation and reopening checked; visual click-away review remains pending |
+| Tests | Release tests cover providers, persistence, popup lifecycle, clipboard readiness and monitor geometry. Both platforms build and test warning-free in CI |
+| Windows | Native tray and Direct2D panel in daily use; exe has version info and the ring icon |
 
 ## Installing and updating
 
@@ -54,9 +54,9 @@ The product and executable are now named TokenKeeper (`tokenkeeper.exe` / `token
 - [ ] **Version and exe metadata:** `build.rs` embeds a version resource and app icon with `winresource` (build-time only; needs the Windows SDK `rc.exe`). The icon is the tray ring rendered by `src/icon.rs` at 16 to 256 px, with a mid-grey track that reads on light and dark backgrounds. The resource sets the file and product version from `Cargo.toml`, and `FileDescription`/`ProductName` "TokenKeeper", which Windows shows as the app name (for example in Settings > Taskbar > Other system tray icons). Windows caches that name per exe path in `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache`; delete the stale entry if the old name persists. Still to do:
   - optionally, a manifest. DPI awareness is already set in code (`SetProcessDpiAwarenessContext` per-monitor v2 in `main.rs`), but a manifest is the recommended way.
 - [x] **License:** MIT, recorded in `LICENSE`, the README and Cargo package metadata.
-- [x] **CI:** `.github/workflows/build.yml` runs native Windows/MSVC and Linux builds and tests, then uploads unsigned binaries with the MIT license and installation instructions. Toolchain: Rust 1.99.0, pinned in `rust-toolchain.toml`. No account credentials or signing secrets are needed. See the development guide for triggers and downloads.
+- [x] **CI:** `.github/workflows/build.yml` runs native Windows/MSVC and Linux builds and tests, then uploads unsigned archives with the MIT license and installation instructions. `.github/workflows/release.yml` publishes a GitHub release from the `Cargo.toml` version. Toolchain: Rust 1.99.0, pinned in `rust-toolchain.toml`. No account credentials or signing secrets are needed. See the development guide for triggers and downloads.
 - [x] **User README:** what the app does, how to run it, where data lives (`%APPDATA%\ai-usage`), how to remove it (quit, untick "Autostart", delete the folder), and a privacy note. Tokens are DPAPI-encrypted and stay on the machine, and Copilot and Claude use minimal scopes (`read:user`, `user:profile`); ChatGPT credentials must not be described as read-only.
-- [ ] **Update path:** there's none yet. The simplest option is a "new version available" check against GitHub Releases, or just documenting how to replace the exe in place.
+- [ ] **Update path:** GitHub Releases now carry the downloads, but the app has no update check. The simplest option is a "new version available" check against the latest release.
   - For now, replace the installed executable in place. Autostart re-points itself at whichever copy runs (see "Installing and updating").
 
 ## Risks to keep in mind
