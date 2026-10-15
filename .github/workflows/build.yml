@@ -11,6 +11,10 @@ on:
         description: Archive name label, for example a release version. Defaults to <branch>-<run number>.
         type: string
         default: ''
+      release:
+        description: Build from scratch without the Rust cache, so release archives never depend on cached output.
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -65,6 +69,15 @@ jobs:
         with:
           toolchain: 1.99.0
           targets: ${{ matrix.target }}
+
+      # Caches dependencies and target/ between runs, keyed on Cargo.lock and the
+      # toolchain. Only main saves the cache; pull requests restore it.
+      - name: Restore Rust cache
+        if: ${{ !inputs.release }}
+        uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          key: ${{ matrix.target }}
+          save-if: ${{ github.ref == 'refs/heads/main' }}
 
       - name: Run tests
         run: cargo test --release --locked --target "${{ matrix.target }}"
