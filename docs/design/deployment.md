@@ -51,8 +51,7 @@ The product and executable are now named TokenKeeper (`tokenkeeper.exe` / `token
 
 ## Release checklist
 
-- [ ] **Version and exe metadata:** `build.rs` embeds a version resource with `winresource` (build-time only; needs the Windows SDK `rc.exe`). It sets the file and product version from `Cargo.toml`, and `FileDescription`/`ProductName` "TokenKeeper", which Windows shows as the app name (for example in Settings > Taskbar > Other system tray icons). Windows caches that name per exe path in `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache`; delete the stale entry if the old name persists. Still to do:
-  - an app icon (the ring);
+- [ ] **Version and exe metadata:** `build.rs` embeds a version resource and app icon with `winresource` (build-time only; needs the Windows SDK `rc.exe`). The icon is the tray ring rendered by `src/icon.rs` at 16 to 256 px, with a mid-grey track that reads on light and dark backgrounds. The resource sets the file and product version from `Cargo.toml`, and `FileDescription`/`ProductName` "TokenKeeper", which Windows shows as the app name (for example in Settings > Taskbar > Other system tray icons). Windows caches that name per exe path in `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache`; delete the stale entry if the old name persists. Still to do:
   - optionally, a manifest. DPI awareness is already set in code (`SetProcessDpiAwarenessContext` per-monitor v2 in `main.rs`), but a manifest is the recommended way.
 - [x] **License:** MIT, recorded in `LICENSE`, the README and Cargo package metadata.
 - [x] **CI:** `.github/workflows/build.yml` runs native Windows/MSVC and Linux builds and tests, then uploads unsigned binaries with the MIT license and installation instructions. Toolchain: Rust 1.99.0, pinned in `rust-toolchain.toml`. No account credentials or signing secrets are needed. See the development guide for triggers and downloads.

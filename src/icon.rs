@@ -16,7 +16,7 @@ pub fn level_rgb(used: f32) -> u32 {
 
 pub use renderer::render;
 
-mod renderer {
+pub(crate) mod renderer {
     use super::level_rgb;
     use std::f32::consts::TAU;
     #[derive(Clone, Copy)]
@@ -111,18 +111,25 @@ mod renderer {
     /// the billing cycle elapsed, drawn as the pace tick. `None` draws just the
     /// empty track, for signed-out or loading states.
     pub fn render(size: u32, usage: Option<(f32, f32)>, light_taskbar: bool) -> Vec<u8> {
+        if light_taskbar {
+            render_with(size, usage, (0x1A1A1A, 1.0), (0x000000, 0.18))
+        } else {
+            render_with(size, usage, (0xFFFFFF, 1.0), (0xFFFFFF, 0.25))
+        }
+    }
+
+    /// `render` with explicit `(0xRRGGBB, alpha)` colours for the pace tick
+    /// and the empty track. `build.rs` uses it for the exe icon (as `icon::renderer::render_with`).
+    pub fn render_with(
+        size: u32,
+        usage: Option<(f32, f32)>,
+        tick: (u32, f32),
+        track: (u32, f32),
+    ) -> Vec<u8> {
         let s = size as f32;
         let c = s / 2.0;
-        let fg = if light_taskbar {
-            Rgba::hex(0x1A1A1A, 1.0)
-        } else {
-            Rgba::hex(0xFFFFFF, 1.0)
-        };
-        let track = if light_taskbar {
-            Rgba::hex(0x000000, 0.18)
-        } else {
-            Rgba::hex(0xFFFFFF, 0.25)
-        };
+        let fg = Rgba::hex(tick.0, tick.1);
+        let track = Rgba::hex(track.0, track.1);
         let mut cv = Canvas::new(size);
 
         let r_out = c - 0.5;
