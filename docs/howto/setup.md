@@ -1,9 +1,18 @@
 # Installation and autostart
 
+Download the latest archive from the
+[Releases page](https://github.com/ricnewton/tokenkeeper/releases/latest), or
+build from source as described below.
+
 ### Windows
 
-Run `tokenkeeper.exe`. No installer or administrator rights are required.
-Enable **Autostart** in the tray menu to start it when you sign in.
+Extract `tokenkeeper-win-<version>.zip` to a folder of your choice and run
+`tokenkeeper.exe`. No installer or administrator rights are required. The exe
+is unsigned, so SmartScreen may warn on first launch; choose **More info → Run
+anyway**. Enable **Autostart** in the tray menu to start it when you sign in.
+
+To update, quit TokenKeeper, replace `tokenkeeper.exe` with the new one and
+start it again. Accounts, history and settings are kept.
 
 To build from source with Rust:
 
@@ -34,7 +43,15 @@ The desktop must provide StatusNotifier tray support and an XDG OpenURI portal
 Rust D-Bus clients; libsecret, libdbusmenu, curl, OpenSSL and xdg-utils are not
 app runtime requirements. GTK3, Cairo and GIO are not required either.
 
-With Rust installed:
+To install a release, extract `tokenkeeper-linux-<version>.tar.gz`, then:
+
+```bash
+mkdir -p ~/.local/bin
+install -m 755 tokenkeeper ~/.local/bin/tokenkeeper
+~/.local/bin/tokenkeeper
+```
+
+To build from source with Rust installed:
 
 ```bash
 cargo test --release --locked

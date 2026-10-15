@@ -34,7 +34,11 @@ Linux uses the XDG data directory. Autostart uses the current user's Windows
 `Run` registry key or a Linux desktop-session autostart entry. Existing installations
 retain their original storage names; see [deployment details](../design/deployment.md) for storage names.
 
-Diagnostics are in `debug/log.txt` under the data directory. To check your saved
+Diagnostics are off by default. To turn them on, set the `TOKENKEEPER_DEBUG`
+environment variable (for example `setx TOKENKEEPER_DEBUG 1` on Windows, then
+restart the app). TokenKeeper then writes sign-in, sign-out and error events to
+`debug/log.txt` under the data directory, capped at 256 KB, plus the body of
+any failed or unrecognised provider response. To check your saved
 ChatGPT login once, quit the tray app and run `tokenkeeper --check-codex`.
 For OpenCode Go, choose **Accounts → OpenCode Go — Sign in…**, approve the
 browser device code and select the workspace that owns your Go subscription.

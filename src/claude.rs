@@ -128,8 +128,10 @@ impl Provider for Claude {
             let what = if r.status == 429 { "rate limited".to_string() } else { format!("HTTP {}", r.status) };
             return Err(FetchError::Other(format!("Claude usage request failed ({what})")));
         }
-        save_debug("claude-usage.json", &r.body);
-        let mut s = parse_usage(&r.json()?).ok_or_else(|| FetchError::Other("Unrecognised Claude usage response".into()))?;
+        let mut s = parse_usage(&r.json()?).ok_or_else(|| {
+            save_debug("claude-usage.json", &r.body);
+            FetchError::Other("Unrecognised Claude usage response".into())
+        })?;
         s.plan = t.plan.clone().unwrap_or_else(|| "Claude".into());
         let weekly = s.unit == Unit::Basis;
         self.tracker.record(&mut s, |start| if weekly { time::day_month(start) } else { time::month(start + DAY_MS).into() });
@@ -218,7 +220,8 @@ fn parse_usage(v: &Value) -> Option<Snapshot> {
     let extra = &v["extra_usage"];
     let extra_used = extra["used_credits"].as_f64();
     let extra_limit = extra["monthly_limit"].as_f64().filter(|l| *l > 0.0);
-    if extra["is_enabled"].as_bool() == Some(true) {
+    // Without rate-limit windows the spend is already the headline ring.
+    if primary.is_some() && extra["is_enabled"].as_bool() == Some(true) {
         if let (Some(used), Some(limit)) = (extra_used, extra_limit) {
             meters.push(Meter { label: "Extra usage this month".into(), fraction: (used / limit) as f32, resets_ms: None });
         }
@@ -437,6 +440,19 @@ mod tests {
         .unwrap();
         let s = parse_usage(&v).unwrap();
         assert_eq!((s.unit, s.used, s.limit), (Unit::Cents, 500, 10_000));
+        assert!(s.meters.is_empty(), "spend is the ring, not also a meter");
+    }
+
+    #[test]
+    fn lists_extra_usage_beside_rate_limit_windows() {
+        let v: Value = serde_json::from_str(
+            r#"{ "seven_day": { "utilization": 40.0, "resets_at": "2026-04-17T00:59:59Z" },
+                 "extra_usage": { "is_enabled": true, "used_credits": 2500, "monthly_limit": 10000 } }"#,
+        )
+        .unwrap();
+        let s = parse_usage(&v).unwrap();
+        let labels: Vec<&str> = s.meters.iter().map(|m| m.label.as_str()).collect();
+        assert_eq!(labels, ["Weekly, all models", "Extra usage this month"]);
     }
 
     #[test]

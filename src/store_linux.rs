@@ -83,7 +83,17 @@ pub fn save_json(file: &str, v: &Value) {
         let _ = std::fs::write(data_dir().join(file), v.to_string());
     }
 }
+/// Diagnostics (`debug/log.txt` and response dumps) are off unless the
+/// `TOKENKEEPER_DEBUG` environment variable is set.
+fn debug_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("TOKENKEEPER_DEBUG").is_some())
+}
+
 pub fn log(line: &str) {
+    if !debug_enabled() {
+        return;
+    }
     use std::io::Write;
     static LOG_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _guard = LOG_LOCK.lock().unwrap_or_else(|e| e.into_inner());
@@ -108,6 +118,9 @@ pub fn log(line: &str) {
     }
 }
 pub fn save_debug(n: &str, body: &[u8]) {
+    if !debug_enabled() {
+        return;
+    }
     let dir = data_dir().join("debug");
     if std::fs::create_dir_all(&dir).is_ok() {
         let _ = std::fs::write(dir.join(n), body);

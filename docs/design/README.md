@@ -95,8 +95,8 @@ A provider-neutral `Snapshot` contains:
 | --- | --- |
 | `{cursor,copilot,claude,codex,opencode-go}-tokens.bin` | DPAPI-encrypted JSON tokens (`crypto_windows.rs`). Linux keeps these in Secret Service |
 | `{cursor,copilot,claude}-history.json` | Past-cycle totals, plus the tracker's hourly readings |
-| `debug\log.txt` | Timestamped worker events. Starts afresh past 256 KB |
-| `debug\*-error.txt`, `debug\claude-usage.json` | Last unexpected response body for each failure point (see deployment.md) |
+| `debug\log.txt` | Only with `TOKENKEEPER_DEBUG` set: timestamped worker events. Starts afresh past 256 KB |
+| `debug\*-error.txt`, `debug\*.json` | Only with `TOKENKEEPER_DEBUG` set: last failed or unrecognised response body for each failure point |
 
 ## Source map
 

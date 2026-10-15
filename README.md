@@ -46,17 +46,24 @@ or CLIs. Credentials are secured with Windows DPAPI or Linux Secret Service/KWal
 
 ## Quick start
 
-Install Rust. Linux uses bundled Iced software rendering and desktop services for the tray,
-wallet and browser launching; see [setup](docs/howto/setup.md). Networking and
-cryptography are bundled into the executable.
+Download the latest build from the
+[Releases page](https://github.com/ricnewton/tokenkeeper/releases/latest):
 
-```bash
-cargo test --release --locked
-cargo build --release --locked
-```
+- **Windows:** extract `tokenkeeper-win-<version>.zip` to a folder of your
+  choice, for example `%LOCALAPPDATA%\Programs\TokenKeeper`, and run
+  `tokenkeeper.exe`. No installer or administrator rights are needed. The exe
+  is unsigned, so SmartScreen may say "Windows protected your PC" the first
+  time: choose **More info → Run anyway**.
+- **Linux/KDE:** extract `tokenkeeper-linux-<version>.tar.gz`, then run
+  `install -m 755 tokenkeeper ~/.local/bin/tokenkeeper` and start
+  `~/.local/bin/tokenkeeper`. It needs a StatusNotifier tray, Secret Service
+  (KWallet) and the usual X11 or Wayland libraries; see
+  [setup](docs/howto/setup.md).
 
-Run `target/release/tokenkeeper` on Linux or `target\release\tokenkeeper.exe`
-on Windows. The first launch stays idle. Right-click the tray icon, choose
+To build from source instead, install Rust and run
+`cargo build --release --locked`; see [setup](docs/howto/setup.md).
+
+The first launch stays idle. Right-click the tray icon, choose
 **Accounts → Provider — Sign in…**, and complete browser sign-in. Left-click to
 open usage; click away or press Escape to dismiss. Hover shows a summary.
 

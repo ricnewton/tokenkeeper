@@ -44,8 +44,18 @@ pub fn save_json(file: &str, v: &Value) {
     }
 }
 
+/// Diagnostics (`debug/log.txt` and response dumps) are off unless the
+/// `TOKENKEEPER_DEBUG` environment variable is set.
+fn debug_enabled() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("TOKENKEEPER_DEBUG").is_some())
+}
+
 /// Appends a timestamped line to `debug\log.txt`, starting afresh past 256 KB.
 pub fn log(line: &str) {
+    if !debug_enabled() {
+        return;
+    }
     use std::io::Write;
     let dir = data_dir().join("debug");
     let path = dir.join("log.txt");
@@ -70,6 +80,9 @@ pub fn log(line: &str) {
 
 /// Records a failure or unexpected response in the data dir for diagnosis.
 pub fn save_debug(name: &str, body: &[u8]) {
+    if !debug_enabled() {
+        return;
+    }
     let dir = data_dir().join("debug");
     if std::fs::create_dir_all(&dir).is_ok() {
         let _ = std::fs::write(dir.join(name), body);

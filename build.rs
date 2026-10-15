@@ -1,4 +1,4 @@
-// Embeds the Windows version resource and app icon. Explorer and Settings
+// Embeds the Windows version resource, app icon and manifest. Explorer and Settings
 // show FileDescription as the app name (for example in the tray icon list).
 
 #[cfg(windows)]
@@ -15,6 +15,7 @@ fn main() {
 
         let mut res = winresource::WindowsResource::new();
         res.set_icon(ico.to_str().unwrap())
+            .set_manifest(MANIFEST)
             .set("FileDescription", "TokenKeeper")
             .set("ProductName", "TokenKeeper")
             .set("InternalName", "tokenkeeper")
@@ -23,6 +24,32 @@ fn main() {
         res.compile().expect("failed to embed Windows version resource");
     }
 }
+
+/// Windows 10/11 compatibility, per-monitor v2 DPI awareness (also set at
+/// startup in `main_windows.rs`) and no elevation.
+#[cfg(windows)]
+const MANIFEST: &str = r#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
+  <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
+    <application>
+      <supportedOS Id="{8e0f7a12-bfb3-4fe8-b9a5-48fd50a15a9a}"/>
+    </application>
+  </compatibility>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <dpiAware xmlns="http://schemas.microsoft.com/SMI/2005/WindowsSettings">true/pm</dpiAware>
+      <dpiAwareness xmlns="http://schemas.microsoft.com/SMI/2016/WindowsSettings">PerMonitorV2</dpiAwareness>
+    </windowsSettings>
+  </application>
+  <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3">
+    <security>
+      <requestedPrivileges>
+        <requestedExecutionLevel level="asInvoker" uiAccess="false"/>
+      </requestedPrivileges>
+    </security>
+  </trustInfo>
+</assembly>
+"#;
 
 /// The tray ring as a multi-size ICO with PNG entries. Mid-grey track and
 /// tick so the icon reads on both light and dark backgrounds.
