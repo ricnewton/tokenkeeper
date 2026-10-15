@@ -51,9 +51,7 @@ The product and executable are now named TokenKeeper (`tokenkeeper.exe` / `token
 
 ## Release checklist
 
-- [ ] **Version and exe metadata:** there is no `build.rs`, so the exe has no icon resource, version info or manifest. Add a `build.rs` (for example with `winresource`, or a hand-written `.rc` built with `embed-resource`) that sets:
-  - the file and product version from `Cargo.toml`;
-  - the company name and description;
+- [ ] **Version and exe metadata:** `build.rs` embeds a version resource with `winresource` (build-time only; needs the Windows SDK `rc.exe`). It sets the file and product version from `Cargo.toml`, and `FileDescription`/`ProductName` "TokenKeeper", which Windows shows as the app name (for example in Settings > Taskbar > Other system tray icons). Windows caches that name per exe path in `HKCU\Software\Classes\Local Settings\Software\Microsoft\Windows\Shell\MuiCache`; delete the stale entry if the old name persists. Still to do:
   - an app icon (the ring);
   - optionally, a manifest. DPI awareness is already set in code (`SetProcessDpiAwarenessContext` per-monitor v2 in `main.rs`), but a manifest is the recommended way.
 - [x] **License:** MIT, recorded in `LICENSE`, the README and Cargo package metadata.
