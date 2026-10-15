@@ -5,12 +5,18 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+  workflow_call:
+    inputs:
+      label:
+        description: Archive name label, for example a release version. Defaults to <branch>-<run number>.
+        type: string
+        default: ''
 
 permissions:
   contents: read
 
 concurrency:
-  group: build-${{ github.ref }}
+  group: build-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -26,12 +32,14 @@ jobs:
             os: ubuntu-24.04
             target: x86_64-unknown-linux-gnu
             binary: tokenkeeper
-            archive: tokenkeeper-linux-x86_64.tar.gz
+            platform: linux
+            extension: tar.gz
           - name: Windows x64
             os: windows-2022
             target: x86_64-pc-windows-msvc
             binary: tokenkeeper.exe
-            archive: tokenkeeper-windows-x86_64.zip
+            platform: win
+            extension: zip
     defaults:
       run:
         shell: bash
@@ -64,6 +72,17 @@ jobs:
       - name: Build release
         run: cargo build --release --locked --target "${{ matrix.target }}"
 
+      - name: Name archive
+        env:
+          LABEL: ${{ inputs.label }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: |
+          if [ -z "$LABEL" ]; then
+            LABEL="$(printf '%s' "$BRANCH" | tr -c 'A-Za-z0-9._-' '-')-$RUN_NUMBER"
+          fi
+          echo "ARCHIVE=tokenkeeper-${{ matrix.platform }}-$LABEL.${{ matrix.extension }}" >> "$GITHUB_ENV"
+
       - name: Prepare download
         run: |
           mkdir -p dist/package
@@ -73,17 +92,19 @@ jobs:
 
       - name: Archive Linux build
         if: runner.os == 'Linux'
-        run: tar -czf "dist/${{ matrix.archive }}" -C dist/package .
+        run: tar -czf "dist/$ARCHIVE" -C dist/package .
 
       - name: Archive Windows build
         if: runner.os == 'Windows'
         shell: pwsh
-        run: Compress-Archive -Path dist/package/* -DestinationPath "dist/${{ matrix.archive }}"
+        run: Compress-Archive -Path dist/package/* -DestinationPath "dist/$env:ARCHIVE"
 
+      # archive: false uploads the file as-is, so the download is the archive
+      # itself rather than a zip wrapping it. The artifact takes the file name.
       - name: Upload download
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: ${{ matrix.target }}
-          path: dist/${{ matrix.archive }}
+          path: dist/${{ env.ARCHIVE }}
+          archive: false
           if-no-files-found: error
           retention-days: 7

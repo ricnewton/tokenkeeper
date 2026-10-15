@@ -52,13 +52,25 @@ Rust 1.99.0. Windows builds natively with MSVC so its tests actually run;
 the local GNU cross-check above is an additional compilation check.
 
 Open a successful run in the repository's **Actions** tab and download
-`x86_64-unknown-linux-gnu` or `x86_64-pc-windows-msvc`. Inside the downloaded
-artifact is a platform archive containing the executable, README, installation
-instructions and MIT license. Artifacts expire after seven days. Linux builds
+`tokenkeeper-win-<branch>-<run>.zip` or `tokenkeeper-linux-<branch>-<run>.tar.gz`,
+where `<run>` is the workflow run number. Each download is the archive itself
+(uploaded with `archive: false`, so GitHub does not wrap it in another zip). It
+contains the executable, README, installation instructions and MIT license.
+Artifacts expire after seven days. Linux builds
 require the desktop runtime libraries listed in the installation instructions;
 they are not static binaries. Windows binaries are unsigned.
 
 The jobs run without supplier credentials or interactive sign-in. Unit tests
 and builds do not validate live account access or tray behavior; those still
-need desktop testing. The workflow needs only repository read permission and
+need desktop testing. The build workflow needs only repository read permission and
 works with a private repository on GitHub Free, within its included allowance.
+
+### Releases
+
+To publish a release, bump `version` in `Cargo.toml` on `main`, push it, then
+run the **Release** workflow from the Actions tab. It reads the version, fails
+if release `v<version>` already exists, runs the same build and tests (by
+calling `build.yml`), then creates tag `v<version>` on that commit and a GitHub
+release with generated notes and two assets: `tokenkeeper-win-<version>.zip`
+and `tokenkeeper-linux-<version>.tar.gz`. Only the publish job has write
+permission to the repository contents.
