@@ -4,7 +4,7 @@ use std::rc::Rc;
 use std::sync::mpsc::{self, Receiver};
 use std::time::{Duration, Instant};
 
-use crate::model::{ProviderId, Snapshot, View};
+use crate::model::{ProviderId, Snapshot, View, scroll_target, switch_targets};
 use crate::popup::{Gfx, Kind, Popup};
 use crate::provider::Provider;
 use crate::worker::{Cmd, Event, WM_WORKER_EVENT, Worker};
@@ -117,6 +117,8 @@ struct Slot {
     last_good: Option<Rc<Snapshot>>,
     sign_item: MenuItem,
     show_item: CheckMenuItem,
+    /// Whether `show_item` is currently in the "Switch tray icon" submenu.
+    listed: Cell<bool>,
 }
 
 impl Slot {
@@ -132,6 +134,7 @@ struct App {
     events: Receiver<(ProviderId, Event)>,
     light_taskbar: bool,
     icon_size: u32,
+    show_menu: Submenu,
     refresh_item: MenuItem,
     autostart_item: CheckMenuItem,
     quit_item: MenuItem,
@@ -177,14 +180,12 @@ impl App {
                     last_good: None,
                     sign_item: MenuItem::new(format!("Sign in to {}…", id.name()), true, None),
                     show_item: CheckMenuItem::new(id.name(), true, i == 0, None),
+                    listed: Cell::new(false),
                 }
             })
             .collect();
 
         let menu = Menu::new();
-        for s in &slots {
-            show_menu.append(&s.show_item).unwrap();
-        }
         for s in &slots {
             accounts_menu.append(&s.sign_item).unwrap();
         }
@@ -215,6 +216,7 @@ impl App {
             events,
             light_taskbar,
             icon_size,
+            show_menu,
             refresh_item,
             autostart_item,
             quit_item,
@@ -315,6 +317,10 @@ impl App {
         };
         if shows_code {
             self.pin_code_card(index);
+        } else if matches!(self.slot().view, View::SignedOut(_)) {
+            if let Some(&i) = switch_targets(self.slots.iter().map(|s| &s.view)).first() {
+                self.active = i;
+            }
         }
         self.unpin_if_done();
         self.refresh();
@@ -344,18 +350,18 @@ impl App {
         }
     }
 
-    /// Mouse wheel over the icon or a popup: step through providers.
+    /// Mouse wheel over the icon or a popup: step through providers with usage.
     fn on_wheel(&mut self, delta: i32) {
         self.wheel_acc += delta;
-        let n = self.slots.len() as i32;
-        let mut step = 0;
+        let ready = switch_targets(self.slots.iter().map(|s| &s.view));
+        let mut next = self.active;
         while self.wheel_acc.abs() >= WHEEL_STEP {
-            // Wheel down (negative) moves to the next provider.
-            step -= self.wheel_acc.signum();
-            self.wheel_acc -= self.wheel_acc.signum() * WHEEL_STEP;
+            let sign = self.wheel_acc.signum();
+            next = scroll_target(next, sign, &ready).unwrap_or(next);
+            self.wheel_acc -= sign * WHEEL_STEP;
         }
-        if step != 0 {
-            self.select((self.active as i32 + step).rem_euclid(n) as usize);
+        if next != self.active {
+            self.select(next);
         }
     }
 
@@ -497,11 +503,25 @@ impl App {
     }
 
     fn refresh(&self) {
+        let targets = switch_targets(self.slots.iter().map(|s| &s.view));
+        let mut position = 0;
         for (i, s) in self.slots.iter().enumerate() {
             s.sign_item.set_text(s.sign_text());
             s.sign_item.set_enabled(!matches!(s.view, View::Loading));
             s.show_item.set_checked(i == self.active);
+            let list = targets.contains(&i)
+                || (i == self.active && !matches!(s.view, View::SignedOut(_)));
+            if list != s.listed.get() {
+                let _ = if list {
+                    self.show_menu.insert(&s.show_item, position)
+                } else {
+                    self.show_menu.remove(&s.show_item)
+                };
+                s.listed.set(list);
+            }
+            position += list as usize;
         }
+        self.show_menu.set_enabled(position > 0);
         let can_refresh = self
             .slots
             .iter()

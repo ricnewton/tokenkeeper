@@ -19,6 +19,7 @@ The icon always shows one provider, the **active** one:
 
 - It defaults to Cursor.
 - Change it from the menu ("Switch tray icon ▸") or by scrolling the mouse wheel over the icon.
+- Both only offer providers with usage to show; signed-out (or not yet loaded) providers are skipped. If the active provider signs out, the icon moves to the first one with usage.
 - Tray icons don't get wheel messages, so the app installs a low-level mouse hook (`WH_MOUSE_LL`) only while the pointer hovers the icon. The hook swallows wheel events inside the icon's rectangle and posts `WM_WHEEL_SWITCH` to the UI thread. The popups also forward their own `WM_MOUSEWHEEL`.
 - When a GitHub device code appears, the active provider switches to Copilot.
 

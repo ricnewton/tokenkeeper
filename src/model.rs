@@ -282,6 +282,42 @@ fn thousands(v: u32) -> String {
     out
 }
 
+/// Providers the tray icon can switch to: signed-out or empty ones would only
+/// show a blank ring.
+pub fn switch_targets<'a>(views: impl IntoIterator<Item = &'a View>) -> Vec<usize> {
+    views
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, v)| v.snapshot().map(|_| i))
+        .collect()
+}
+
+/// The provider a wheel step lands on, cycling through `ready` only. Positive
+/// `delta` (wheel up) moves to the previous one.
+pub fn scroll_target(active: usize, delta: i32, ready: &[usize]) -> Option<usize> {
+    if delta == 0 || ready.is_empty() {
+        return None;
+    }
+    if let Some(position) = ready.iter().position(|&i| i == active) {
+        let next =
+            (position as isize - delta.signum() as isize).rem_euclid(ready.len() as isize) as usize;
+        Some(ready[next])
+    } else if delta > 0 {
+        ready
+            .iter()
+            .rev()
+            .copied()
+            .find(|&i| i < active)
+            .or_else(|| ready.last().copied())
+    } else {
+        ready
+            .iter()
+            .copied()
+            .find(|&i| i > active)
+            .or_else(|| ready.first().copied())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -304,5 +340,16 @@ mod tests {
         assert_eq!(s.of_text(), "of the subscription limit");
         assert_eq!(s.resets_text(), "Reset time not reported");
         assert_eq!(s.projected_fraction(), s.used_fraction());
+    }
+
+    #[test]
+    fn signed_out_providers_are_skipped_when_scrolling() {
+        assert_eq!(scroll_target(3, 120, &[0, 3]), Some(0));
+        assert_eq!(scroll_target(0, -120, &[0, 3]), Some(3));
+        assert_eq!(scroll_target(0, 120, &[0, 3]), Some(3));
+        assert_eq!(scroll_target(2, -120, &[0, 3]), Some(3));
+        assert_eq!(scroll_target(3, 120, &[3]), Some(3));
+        assert_eq!(scroll_target(3, 120, &[]), None);
+        assert_eq!(scroll_target(3, 0, &[3]), None);
     }
 }

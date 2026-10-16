@@ -1,7 +1,7 @@
 //! Borderless Iced/tiny-skia usage panel with native KDE StatusNotifier integration.
 use crate::linux_panel::{self, Hit, Panel};
 use crate::linux_tray::{Action as TrayAction, MenuAction as Action, MenuEntry};
-use crate::model::{ProviderId, Snapshot, View};
+use crate::model::{ProviderId, Snapshot, View, scroll_target, switch_targets};
 use crate::provider::Provider;
 use crate::worker::{Cmd, Event, Worker};
 use crate::{autostart, claude, codex, copilot, cursor, opencode};
@@ -272,12 +272,7 @@ impl App {
         }
     }
     fn cycle(&mut self, delta: i32) {
-        let ready: Vec<_> = self
-            .slots
-            .iter()
-            .enumerate()
-            .filter_map(|(i, s)| s.view.snapshot().map(|_| i))
-            .collect();
+        let ready = switch_targets(self.slots.iter().map(|s| &s.view));
         if let Some(next) = scroll_target(self.active, delta, &ready) {
             self.active = next;
             self.tab = 0;
@@ -556,10 +551,15 @@ impl App {
                 action: Action::Sign(i),
             })
             .collect();
+        let targets = switch_targets(self.slots.iter().map(|s| &s.view));
         let icons = self
             .slots
             .iter()
             .enumerate()
+            .filter(|&(i, slot)| {
+                targets.contains(&i)
+                    || (i == self.active && !matches!(slot.view, View::SignedOut(_)))
+            })
             .map(|(i, slot)| {
                 MenuEntry::item(
                     format!(
@@ -628,30 +628,6 @@ impl App {
         );
     }
 }
-fn scroll_target(active: usize, delta: i32, ready: &[usize]) -> Option<usize> {
-    if delta == 0 || ready.is_empty() {
-        return None;
-    }
-    if let Some(position) = ready.iter().position(|&i| i == active) {
-        let next =
-            (position as isize - delta.signum() as isize).rem_euclid(ready.len() as isize) as usize;
-        Some(ready[next])
-    } else if delta > 0 {
-        ready
-            .iter()
-            .rev()
-            .copied()
-            .find(|&i| i < active)
-            .or_else(|| ready.last().copied())
-    } else {
-        ready
-            .iter()
-            .copied()
-            .find(|&i| i > active)
-            .or_else(|| ready.first().copied())
-    }
-}
-
 fn light_theme() -> bool {
     std::env::var("TOKENKEEPER_THEME")
         .or_else(|_| std::env::var("AI_USAGE_THEME"))
@@ -794,16 +770,5 @@ mod tests {
         };
         assert_eq!(snap.used_fraction(), 0.33);
         assert_eq!(error.as_deref(), Some("temporary failure"));
-    }
-
-    #[test]
-    fn signed_out_providers_are_skipped_when_scrolling() {
-        assert_eq!(scroll_target(3, 120, &[0, 3]), Some(0));
-        assert_eq!(scroll_target(0, -120, &[0, 3]), Some(3));
-        assert_eq!(scroll_target(0, 120, &[0, 3]), Some(3));
-        assert_eq!(scroll_target(2, -120, &[0, 3]), Some(3));
-        assert_eq!(scroll_target(3, 120, &[3]), Some(3));
-        assert_eq!(scroll_target(3, 120, &[]), None);
-        assert_eq!(scroll_target(3, 0, &[3]), None);
     }
 }
