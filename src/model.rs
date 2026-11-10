@@ -45,10 +45,10 @@ impl ProviderId {
     /// Web page with the provider's own (more detailed) usage view.
     pub fn usage_url(self) -> &'static str {
         match self {
-            ProviderId::Cursor => "https://cursor.com/dashboard?tab=usage",
+            ProviderId::Cursor => "https://cursor.com/dashboard/usage",
             ProviderId::Copilot => "https://github.com/settings/copilot/features",
             ProviderId::Claude => "https://claude.ai/settings/usage",
-            ProviderId::Codex => "https://chatgpt.com/codex/settings/usage",
+            ProviderId::Codex => "https://chatgpt.com/settings/usage",
             ProviderId::OpenCode => "https://opencode.ai/console",
         }
     }
