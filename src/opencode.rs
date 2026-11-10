@@ -432,6 +432,9 @@ fn parse_usage(v: &Value) -> Result<Snapshot, String> {
                     .then(|| access["endsAt"].as_str().and_then(time::parse_timestamp_ms))
                     .flatten()
             });
+        if key == "month" {
+            s.cycle_start_ms = resets.map(time::previous_month_start).unwrap_or(0);
+        }
         s.meters.push(Meter {
             label: label.into(),
             fraction,
@@ -445,8 +448,6 @@ fn parse_usage(v: &Value) -> Result<Snapshot, String> {
     s.limit = 10_000;
     s.used = (headline.fraction * 10_000.0).round() as u32;
     s.cycle_end_ms = headline.resets_ms.unwrap_or(0);
-    // The service does not report the start of the quota window. Do not invent
-    // one or derive pace/history from this reading.
     s.plan = format!("Go · {}", headline.label);
     s.details = vec![Detail::Limits];
     s.empty_note = "OpenCode reports subscription limits only";
@@ -695,7 +696,7 @@ mod tests {
         assert!(select_org(&json!([{"id":"bad\n"}])).is_err());
     }
     #[test]
-    fn parses_console_meters_without_inventing_pace_or_spending() {
+    fn parses_console_meters_and_estimates_monthly_pace_from_access_end() {
         let s = parse_usage(&json!({"access":{"endsAt":"2026-11-01T00:00:00Z","meters":{
             "fiveHour":{"usedMicroCents":"300000000","limitMicroCents":"1200000000","resetsAt":"2026-10-11T18:00:00Z"},
             "week":{"usedMicroCents":1200000000u64,"limitMicroCents":3000000000u64},
@@ -705,7 +706,7 @@ mod tests {
         assert_eq!(s.meters[0].fraction, 0.25);
         assert_eq!(s.meters[1].resets_ms, None);
         assert_eq!(s.used, 1000);
-        assert_eq!(s.cycle_start_ms, 0);
+        assert_eq!(s.cycle_start_ms, time::parse_timestamp_ms("2026-10-01T00:00:00Z").unwrap());
         assert_eq!(
             s.cycle_end_ms,
             time::parse_timestamp_ms("2026-11-01T00:00:00Z").unwrap()
@@ -713,6 +714,26 @@ mod tests {
         assert_eq!(s.details, vec![Detail::Limits]);
         assert!(s.history.is_empty());
     }
+    #[test]
+    fn monthly_pace_uses_the_meter_reset_and_clamps_to_leap_day() {
+        let s = parse_usage(&json!({"access":{"endsAt":"2024-04-01T00:00:00Z","meters":{
+            "month":{"usedMicroCents":16,"limitMicroCents":100,"resetsAt":"2024-03-31T12:30:00Z"}
+        }}})).unwrap();
+        assert_eq!(s.cycle_start_ms, time::parse_timestamp_ms("2024-02-29T12:30:00Z").unwrap());
+        assert!(s.pace_text().starts_with("On pace for ~"));
+    }
+
+    #[test]
+    fn no_monthly_pace_without_a_monthly_reset() {
+        for meters in [
+            json!({"week":{"usedMicroCents":1,"limitMicroCents":100,"resetsAt":"2026-11-16T00:00:00Z"}}),
+            json!({"month":{"usedMicroCents":16,"limitMicroCents":100}}),
+        ] {
+            let s = parse_usage(&json!({"access":{"meters":meters}})).unwrap();
+            assert_eq!(s.pace_text(), "Usage pace unavailable");
+        }
+    }
+
     #[test]
     fn missing_entitlement_and_malformed_usage_are_errors() {
         for v in [

@@ -79,6 +79,16 @@ pub fn months_before(ms: i64, months: i64) -> i64 {
     days_from_civil(ny, nm, d.min(28)) * DAY_MS + day_ms
 }
 
+/// Estimate a monthly window's start from its UTC reset, clamping to the
+/// previous month's last day when the reset day doesn't exist there.
+pub fn previous_month_start(reset_ms: i64) -> i64 {
+    let (year, month, day) = civil_from_days(reset_ms.div_euclid(DAY_MS));
+    let first = days_from_civil(year, month, 1);
+    let (_, _, previous_month_days) = civil_from_days(first - 1);
+    let start = first - previous_month_days + day.min(previous_month_days) - 1;
+    start * DAY_MS + reset_ms.rem_euclid(DAY_MS)
+}
+
 /// Milliseconds since the epoch as read on a local wall clock, so that
 /// `div_euclid(DAY_MS)` buckets by local calendar day.
 pub fn local_wall_ms(ms: i64) -> i64 {

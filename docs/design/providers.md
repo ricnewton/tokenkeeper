@@ -113,8 +113,10 @@ for percentages. Numbers can be JSON numbers or decimal strings. Reset times
 come from `resetsAt`; the monthly meter can fall back to `access.endsAt`.
 Show every reported meter under Limits and the longest reported window in the
 headline. Missing/invalid quota is an error. A 403 is an access/entitlement
-error and preserves the session. Do not derive dollar spend, history or pace:
-the response does not establish cycle start. Tokens and device codes never go
+error and preserves the session. Estimate monthly pace using the monthly fraction
+and a start one calendar month before reset, clamped to the last valid UTC
+day. Pace requires a monthly reset. The meters do not establish dollar spend
+or usage history. Tokens and device codes never go
 into response dumps or logs. `--check-opencode` shares the process guard.
 
 Validation: the production device-code endpoint accepted the initial request
