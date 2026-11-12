@@ -196,3 +196,29 @@ The updater uses ureq and system certificate verification. Windows automatic
 WinHTTP proxy discovery is not reused; proxy environment settings are documented.
 Simplicity tradeoffs: no failed-launch rollback, no automatic elevation, no changes
 to Linux runtime compatibility. See the permanent setup and signing guides.
+
+
+Verification so far: 62 Linux tests passed, 2 existing desktop-dependent tests
+ignored. Signed fixture tests prove replacement and rejection of tampered,
+unsigned and wrong-name downloads. The isolated Linux subprocess smoke test
+replaced a running old harness with a different signed executable and restarted;
+new bytes and single-instance lock acquisition were verified. Script/evidence
+are under `.local/update-smoke/`. It uses mocked HTTP and does not exercise the GUI.
+Native GitHub Windows/Linux verification runs on the branch. Initial Windows CI
+caught a Linux-only test helper compiled on Windows; its cfg was corrected.
+
+At the user's request, an AES-256 GnuPG encrypted backup was copied to Percy and
+verified by checksum. A Bitwarden secure-note JSON import was prepared locally;
+the user must import it and confirm success before deleting that plaintext file.
+Backup locations and secrets remain in private recovery material, not Git.
+
+
+Final verification: [native GitHub CI run 43272429035](https://github.com/ricnewton/tokenkeeper/actions/runs/43272429035)
+passed Windows x64 and Linux x64 tests, release builds and archive packaging for
+code revision `e0ba0fc`. Local `RUSTFLAGS=-Dwarnings cargo test --release --locked`
+also passed 62 tests with the two existing desktop-only tests ignored. Changes
+after that revision only document verification and backup/recovery guidance.
+Windows in-place replacement/restart and the GUI were not manually exercised;
+Windows signed-download/replacement fixtures ran in native CI, and actual Linux
+self-replacement/restart was exercised by the isolated harness. The branch is
+ready for review; no merge or release was performed.

@@ -60,3 +60,21 @@ Run the Release workflow after bumping `Cargo.toml`. If attachment or publishing
 fails, the release stays a draft and the updater ignores it. Inspect that draft
 before deleting it and rerunning the workflow; the version check deliberately
 rejects a release tag that already exists.
+
+## Recovery backup
+
+The signing key must have a recovery copy outside the checkout. GitHub Actions
+secrets cannot be read back, so the configured secret is not an exportable backup.
+The owner's Bitwarden secure note should hold the base64-encoded 64-byte private
+key, public-key fingerprint, encrypted-backup password and restore instructions.
+A separately stored encrypted archive should contain the raw private/public keys
+and those instructions. Keep the archive password out of the backup machine.
+
+After preparing a backup, decrypt it in memory or a private temporary directory
+and compare the recovered key with the original. Verify the uploaded archive's
+checksum. Delete plaintext import files after confirming the Bitwarden import.
+Never commit private keys, recovery passwords or Bitwarden import files.
+
+Trust starts with the user's first installation from the official repository.
+That app embeds the public key; later archives must verify against it, including
+the platform/version filename. This is independent of Windows Authenticode.
