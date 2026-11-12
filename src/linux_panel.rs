@@ -48,7 +48,7 @@ pub fn content_height(slots: &[(ProviderId, View)], active: usize, tab: usize) -
     slots
         .get(active)
         .and_then(|(_, v)| v.snapshot())
-        .map_or(610.0, |s| 380.0 + detail_height(s, tab) + 58.0)
+        .map_or(630.0, |s| 380.0 + detail_height(s, tab) + 78.0)
         - if visible_providers(slots, active).len() == 1 {
             155.0
         } else {
@@ -169,6 +169,14 @@ impl canvas::Program<Action> for Panel {
                     if self.light { 0.976 } else { 0.169 },
                     if self.light { 0.976 } else { 0.169 },
                 ),
+            );
+            self.text(
+                &mut f,
+                22.0,
+                bounds.height - 10.0,
+                concat!("TokenKeeper ", env!("CARGO_PKG_VERSION")),
+                11.0,
+                0.56,
             );
             let providers = visible_providers(&self.slots, self.active);
             if providers.len() > 1 {
