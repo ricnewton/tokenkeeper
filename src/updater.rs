@@ -44,7 +44,7 @@ impl Updater {
         }
     }
 
-    #[cfg(test)]
+    #[cfg(all(test, target_os = "linux"))]
     pub fn without_automatic_check() -> Self {
         Self {
             next_check: Instant::now() + CHECK_INTERVAL,

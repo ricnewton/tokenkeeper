@@ -1,6 +1,6 @@
 # Automatic updates on Windows and Linux
 
-Research date: 12 November 2026. Research only; no application or release workflow changes.
+Research date: 12 November 2026. The research below preceded implementation; see the implementation record at the end.
 
 ## Recommendation
 
@@ -166,3 +166,33 @@ the first updater-capable release manually once; subsequent releases can use it.
 
 No runtime update prototype or installation test was performed in this research.
 Only this research note was added; production code and workflows are unchanged.
+
+
+## Implementation record — 12 November 2026
+
+Implemented on `codex/automatic-updates`, using the smallest shared controller
+around `self_update` 1.3.3. The tray menu and tooltip carry update status; there
+is no new window, installer, progress percentage, persistent scheduler or rollback
+service. Checks run after startup and daily while the app stays open.
+
+Completion contract: exact platform/version selection, signed download rejection
+before replacement, user-triggered install, background network work, safe provider
+shutdown and single-instance restart on Windows/Linux. Existing storage and
+installation paths remain unchanged. Verify using the suite, signed fixture
+integration tests, release builds, native GitHub CI and isolated replacement smoke.
+
+The public key is committed. The generated private key is stored only under
+`.local/update-signing/private.key` (mode 600), and was configured as the repository
+Actions secret with explicit user approval. Future key rotation must preserve
+trust for already-installed versions. No release has been published by this work.
+
+Independent review identified an interrupted credential-save risk during restart.
+Provider workers now disconnect their command channels and finish active work
+before the UI restarts. A regression test holds a request open across shutdown.
+Restart failures leave a retry action; the provider workers stay stopped until
+restart, rather than resuming writes after the binary has changed.
+
+The updater uses ureq and system certificate verification. Windows automatic
+WinHTTP proxy discovery is not reused; proxy environment settings are documented.
+Simplicity tradeoffs: no failed-launch rollback, no automatic elevation, no changes
+to Linux runtime compatibility. See the permanent setup and signing guides.
