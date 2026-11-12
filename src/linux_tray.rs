@@ -8,6 +8,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 pub enum MenuAction {
     Panel,
     Refresh,
+    Update,
     Quit,
     Autostart,
     Show(usize),

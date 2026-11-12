@@ -7,6 +7,7 @@ description = "Tray app showing AI subscription usage"
 
 [dependencies]
 serde_json = "1"
+self_update = { version = "1.3.3", default-features = false, features = ["ureq", "rustls", "native-certs", "github", "archive-tar", "compression-tar-gz", "archive-zip", "compression-zip-deflate", "signatures", "checksums"] }
 
 [target.'cfg(target_os = "linux")'.dependencies]
 sha2 = "0.11"

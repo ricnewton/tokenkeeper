@@ -11,8 +11,13 @@ Extract `tokenkeeper-win-<version>.zip` to a folder of your choice and run
 is unsigned, so SmartScreen may warn on first launch; choose **More info → Run
 anyway**. Enable **Autostart** in the tray menu to start it when you sign in.
 
-To update, quit TokenKeeper, replace `tokenkeeper.exe` with the new one and
-start it again. Accounts, history and settings are kept.
+TokenKeeper checks for updates after startup and daily while running. Right-click
+its tray icon: when a newer release is available, choose **Update to … and restart**.
+It downloads and verifies the signed release before replacing the executable.
+**Check for updates** checks immediately; failures appear in the same menu.
+Accounts, history, settings and autostart are kept. The installation folder must
+be writable by your account. You can still update manually by quitting and
+replacing `tokenkeeper.exe`.
 
 To build from source with Rust:
 
@@ -51,6 +56,10 @@ install -m 755 tokenkeeper ~/.local/bin/tokenkeeper
 ~/.local/bin/tokenkeeper
 ```
 
+Updates work through the same **Update to … and restart** tray action as Windows.
+Use a user-writable installation such as `~/.local/bin/tokenkeeper`; system-owned
+or package-managed installations should be updated through their installer.
+
 To build from source with Rust installed:
 
 ```bash
@@ -71,3 +80,19 @@ activation. Set `TOKENKEEPER_BACKEND=wayland` to select native Wayland, or
 activation remain compositor controlled. `TOKENKEEPER_THEME=light` selects light
 mode; dark is the default.
 
+
+### Update notes
+
+Versions before the updater was introduced need one manual upgrade first. Only
+published stable GitHub releases are offered; build artifacts are for manual
+installation. A failed download or signature check leaves the installed binary
+untouched. Updates do not elevate privileges or install new system libraries.
+There is no automatic rollback after a successfully installed release fails to
+start; retain a known-good download if you need manual rollback.
+
+The updater uses the system certificate trust store and `HTTPS_PROXY`/`ALL_PROXY`
+environment settings. Unlike provider requests on Windows, its HTTP client does
+not use WinHTTP automatic proxy discovery. On a network requiring a proxy, set
+the proxy environment variable before starting TokenKeeper.
+
+Release maintainers: see [signed updates](updates.md) for signing-key setup.

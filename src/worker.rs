@@ -41,7 +41,8 @@ pub enum Event {
 }
 
 pub struct Worker {
-    tx: Sender<Cmd>,
+    tx: Option<Sender<Cmd>>,
+    thread: std::thread::JoinHandle<()>,
 }
 
 impl Worker {
@@ -51,7 +52,7 @@ impl Worker {
         events: Sender<(ProviderId, Event)>,
     ) -> Self {
         let (tx, rx) = mpsc::channel();
-        std::thread::spawn(move || {
+        let thread = std::thread::spawn(move || {
             #[cfg(windows)]
             unsafe {
                 let _ = CoInitializeEx(None, COINIT_APARTMENTTHREADED | COINIT_DISABLE_OLE1DDE);
@@ -74,11 +75,26 @@ impl Worker {
             };
             run(provider.as_mut(), rx, send);
         });
-        Worker { tx }
+        Worker {
+            tx: Some(tx),
+            thread,
+        }
+    }
+
+    /// Disconnect commands, allowing the current request/save to finish normally.
+    /// Sign-in polling observes the disconnected channel and cancels safely.
+    pub fn stop(&mut self) {
+        self.tx.take();
+    }
+
+    pub fn is_stopped(&self) -> bool {
+        self.thread.is_finished()
     }
 
     pub fn send(&self, cmd: Cmd) {
-        let _ = self.tx.send(cmd);
+        if let Some(tx) = &self.tx {
+            let _ = tx.send(cmd);
+        }
     }
 }
 
@@ -234,6 +250,35 @@ mod tests {
             send(Snapshot::new(ProviderId::Cursor, Unit::Cents));
             Ok(())
         }
+    }
+
+    #[test]
+    fn stopping_waits_for_the_current_request_to_finish() {
+        let (tx, rx) = mpsc::channel();
+        let (started, started_rx) = mpsc::channel();
+        let (finish, finish_rx) = mpsc::channel();
+        let fake = Fake {
+            available: Arc::new(AtomicBool::new(true)),
+            enabled: Arc::new(AtomicBool::new(true)),
+        };
+        let thread = std::thread::spawn(move || {
+            let mut fake = fake;
+            run(&mut fake, rx, |_| {
+                started.send(()).unwrap();
+                // Hold the provider's active request open across stop().
+                finish_rx.recv().unwrap();
+            });
+        });
+        let mut worker = Worker {
+            tx: Some(tx),
+            thread,
+        };
+        started_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        worker.stop();
+        worker.send(Cmd::RefreshNow); // No commands accepted after shutdown.
+        assert!(!worker.is_stopped());
+        finish.send(()).unwrap();
+        worker.thread.join().unwrap();
     }
 
     #[test]

@@ -27,6 +27,7 @@ an aggregate allowance bar for providers that report dollar amounts:
 - Opens a usage panel with reset times, available charts, history and provider dashboard links.
 - Combines signed-in accounts in one panel and lets you switch the tray provider by menu or scroll.
 - Supports browser sign-in, manual refresh and optional autostart on Windows and Linux/KDE.
+- Checks GitHub Releases for updates and offers signed one-click updates from the tray menu.
 
 | Provider | Usage tracked |
 | --- | --- |
