@@ -89,7 +89,7 @@ fn brand_rgb(p: ProviderId) -> Option<u32> {
 const GLANCE_W: f32 = 300.0;
 const GLANCE_H: f32 = 176.0;
 const PANEL_W: f32 = 340.0;
-const PANEL_H: f32 = 328.0;
+const PANEL_H: f32 = 348.0;
 const PAD: f32 = 14.0;
 const BADGE_W: f32 = 76.0;
 
@@ -107,7 +107,7 @@ const COLS_GLANCE_STRIP_H: f32 = 206.0;
 const TOTAL_H: f32 = 40.0;
 const COLS_GLANCE_FOOTER: f32 = COLS_GLANCE_STRIP_H + TOTAL_H;
 const COLS_GLANCE_H: f32 = COLS_GLANCE_FOOTER + 30.0;
-const COLS_PANEL_H: f32 = 378.0 + TOTAL_H;
+const COLS_PANEL_H: f32 = 398.0 + TOTAL_H;
 const COLS_STRIP_H: f32 = 162.0;
 /// Top of the tabs in the panel's single and column layouts.
 const SINGLE_DETAIL_TOP: f32 = 122.0;
@@ -692,7 +692,11 @@ fn draw(
         return;
     }
     let lay = layout(entries, active);
-    let (w, _) = size(kind, &lay);
+    let (w, h) = size(kind, &lay);
+    if kind == Kind::Panel {
+        p.text(concat!("TokenKeeper ", env!("CARGO_PKG_VERSION")), PAD, h - 24.0,
+            w - 2.0 * PAD, 20.0, 11.0, false, Align::Left, pal.fg3);
+    }
     match &lay {
         Layout::Single(i) => draw_single(p, pal, entries[*i].0, &entries[*i].1, kind, tab),
         Layout::Columns(cols) => {

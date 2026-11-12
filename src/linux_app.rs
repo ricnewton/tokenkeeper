@@ -216,7 +216,7 @@ impl App {
         self.anchor = anchor;
         self.had_focus = false;
         let (id, open) = window::open(window::Settings {
-            size: Size::new(440.0, self.panel_height().min(610.0)),
+            size: Size::new(440.0, self.panel_height().min(630.0)),
             decorations: false,
             resizable: false,
             minimizable: false,
@@ -519,7 +519,7 @@ impl App {
             let id = self.window.unwrap();
             Task::batch([
                 task,
-                window::resize(id, Size::new(440.0, self.panel_height().min(610.0))),
+                window::resize(id, Size::new(440.0, self.panel_height().min(630.0))),
             ])
         } else {
             task
@@ -536,7 +536,7 @@ impl App {
         })
         .width(440)
         .height(height);
-        let content: Element<'_, linux_panel::Action> = if height > 610.0 {
+        let content: Element<'_, linux_panel::Action> = if height > 630.0 {
             iced::widget::scrollable(panel)
                 .direction(iced::widget::scrollable::Direction::Vertical(
                     iced::widget::scrollable::Scrollbar::hidden(),
