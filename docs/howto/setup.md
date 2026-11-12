@@ -12,9 +12,9 @@ is unsigned, so SmartScreen may warn on first launch; choose **More info → Run
 anyway**. Enable **Autostart** in the tray menu to start it when you sign in.
 
 TokenKeeper checks for updates after startup and daily while running. Right-click
-its tray icon: when a newer release is available, choose **Update to … and restart**.
-It downloads and verifies the signed release before replacing the executable.
-**Check for updates** checks immediately; failures appear in the same menu.
+its tray icon: when a newer release is available, choose **Update now**.
+It downloads and verifies the signed release, replaces the executable, then restarts.
+**Check for update** checks immediately; version details and failures appear in the tray tooltip.
 Accounts, history, settings and autostart are kept. The installation folder must
 be writable by your account. You can still update manually by quitting and
 replacing `tokenkeeper.exe`.
@@ -56,7 +56,7 @@ install -m 755 tokenkeeper ~/.local/bin/tokenkeeper
 ~/.local/bin/tokenkeeper
 ```
 
-Updates work through the same **Update to … and restart** tray action as Windows.
+Updates work through the same **Update now** tray action as Windows.
 Use a user-writable installation such as `~/.local/bin/tokenkeeper`; system-owned
 or package-managed installations should be updated through their installer.
 

@@ -53,13 +53,25 @@ impl Updater {
     }
 
     pub fn label(&self) -> String {
+        match self.state {
+            State::Idle | State::Current | State::Failed(_) => "Check for update",
+            State::Checking => "Checking…",
+            State::Available(_) => "Update now",
+            State::Installing => "Updating…",
+            State::Restart => "Restarting…",
+            State::RestartFailed => "Restart now",
+        }
+        .into()
+    }
+
+    pub fn status(&self) -> String {
         match &self.state {
-            State::Idle => "Check for updates".into(),
+            State::Idle => format!("TokenKeeper {VERSION}"),
             State::Checking => "Checking for updates…".into(),
             State::Available(version) => format!("Update to {version} and restart"),
             State::Installing => "Downloading and verifying update…".into(),
-            State::Current => format!("{VERSION} is up to date — check again"),
-            State::Failed(error) => format!("Update failed: {error} — retry check"),
+            State::Current => format!("TokenKeeper {VERSION} is up to date"),
+            State::Failed(error) => format!("Update failed: {error}"),
             State::Restart => "Finishing requests before restart…".into(),
             State::RestartFailed => "Update installed — retry restart".into(),
         }
@@ -94,7 +106,10 @@ impl Updater {
             return true;
         }
         if Instant::now() >= self.next_check
-            && !matches!(self.state, State::Restart | State::RestartFailed)
+            && !matches!(
+                self.state,
+                State::Available(_) | State::Restart | State::RestartFailed
+            )
         {
             self.check();
             return true;
@@ -268,6 +283,19 @@ mod tests {
     }
 
     #[test]
+    fn an_available_update_stays_offered_when_the_daily_check_is_due() {
+        let mut updater = Updater::new();
+        updater.state = State::Available("99.0.0".into());
+        updater.next_check = Instant::now() - CHECK_INTERVAL;
+
+        assert!(!updater.poll());
+        assert!(updater.pending.is_none());
+        assert_eq!(updater.label(), "Update now");
+        assert!(updater.enabled());
+        assert!(updater.status().contains("99.0.0"));
+    }
+
+    #[test]
     fn busy_state_prevents_a_second_operation_and_reports_worker_failure() {
         let mut updater = Updater::new();
         let (tx, rx) = mpsc::channel();
@@ -280,7 +308,7 @@ mod tests {
         drop(tx);
         assert!(updater.poll());
         assert!(updater.enabled());
-        assert!(updater.label().contains("worker stopped"));
+        assert!(updater.status().contains("worker stopped"));
     }
 }
 

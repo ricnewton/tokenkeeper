@@ -156,7 +156,7 @@ impl App {
     fn new() -> Self {
         autostart::follow_exe();
 
-        let update_item = MenuItem::new("Check for updates", true, None);
+        let update_item = MenuItem::new("Check for update", true, None);
         let refresh_item = MenuItem::new("Refresh now", true, None);
         let autostart_item = CheckMenuItem::new("Autostart", true, autostart::is_enabled(), None);
         let quit_item = MenuItem::new("Quit", true, None);
@@ -530,7 +530,7 @@ impl App {
         self.quit_item.set_enabled(!self.updater.installing());
         let _ = self
             .tray
-            .set_tooltip(Some(format!("TokenKeeper — {}", self.updater.label())));
+            .set_tooltip(Some(format!("TokenKeeper — {}", self.updater.status())));
         let targets = switch_targets(self.slots.iter().map(|s| &s.view));
         let mut position = 0;
         for (i, s) in self.slots.iter().enumerate() {

@@ -652,19 +652,13 @@ impl App {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        if !self.demo {
-            summary.push_str(&format!("\n{}", self.updater.label()));
+        if summary.is_empty() {
+            summary.push_str("Sign in from Accounts in the tray menu");
         }
-        crate::linux_tray::update(
-            usage,
-            &title,
-            if summary.is_empty() {
-                "Sign in from Accounts in the tray menu"
-            } else {
-                &summary
-            },
-            menu,
-        );
+        if !self.demo {
+            summary.push_str(&format!("\n{}", self.updater.status()));
+        }
+        crate::linux_tray::update(usage, &title, &summary, menu);
     }
 }
 fn light_theme() -> bool {

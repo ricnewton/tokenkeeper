@@ -55,7 +55,7 @@ Done: Claude saves its usage response only when it is unrecognised; the extra-us
 - [x] **CI:** `.github/workflows/build.yml` runs native Windows/MSVC and Linux builds and tests, then uploads unsigned archives with the MIT license and installation instructions. `.github/workflows/release.yml` publishes a GitHub release from the `Cargo.toml` version. Toolchain: Rust 1.99.0, pinned in `rust-toolchain.toml`. No account credentials or signing secrets are needed. See the development guide for triggers and downloads.
 - [x] **User README:** what the app does, how to run it, where data lives (`%APPDATA%\ai-usage`), how to remove it (quit, untick "Autostart", delete the folder), and a privacy note. Tokens are DPAPI-encrypted and stay on the machine, and Copilot and Claude use minimal scopes (`read:user`, `user:profile`); ChatGPT credentials must not be described as read-only.
 - [x] **Update path:** `self_update` checks GitHub after startup and daily. Both
-  tray menus offer a signed **Update to … and restart** action. The release
+  tray menus offer a signed **Update now** action. The release
   workflow signs ZIP/tar.gz downloads with zipsign and verifies them before
   publishing. See [signing setup](../howto/updates.md). First-time adoption needs
   one manual update; writable per-user installations can then update in place.
