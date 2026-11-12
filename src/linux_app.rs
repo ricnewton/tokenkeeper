@@ -18,6 +18,7 @@ struct Slot {
     last_good: Option<Rc<Snapshot>>,
 }
 struct App {
+    updater: crate::updater::Updater,
     window: Option<window::Id>,
     slots: Vec<Slot>,
     events: Receiver<(ProviderId, Event)>,
@@ -153,6 +154,7 @@ impl App {
             .and_then(|s| s.parse().ok())
             .map(Duration::from_secs);
         let mut app = Self {
+            updater: crate::updater::Updater::new(),
             window: None,
             slots,
             events,
@@ -289,7 +291,17 @@ impl App {
                     }
                 }
             }
-            Action::Quit => return iced::exit(),
+            Action::Update => {
+                if !self.demo {
+                    self.updater.activate();
+                    self.refresh();
+                }
+            }
+            Action::Quit => {
+                if !self.updater.installing() {
+                    return iced::exit();
+                }
+            }
             Action::Autostart => {
                 if !self.demo {
                     autostart::set_enabled(!autostart::is_enabled());
@@ -322,7 +334,22 @@ impl App {
         for action in crate::linux_tray::drain() {
             tasks.push(self.tray_action(action));
         }
-        let mut dirty = false;
+        let mut dirty = !self.demo && self.updater.poll();
+        if self.updater.ready_to_restart() {
+            for slot in &mut self.slots {
+                if let Some(worker) = &mut slot.worker {
+                    worker.stop();
+                }
+            }
+            if self
+                .slots
+                .iter()
+                .all(|slot| slot.worker.as_ref().is_none_or(Worker::is_stopped))
+            {
+                self.updater.restart();
+                dirty = true;
+            }
+        }
         let mut show = false;
         while let Ok((id, event)) = self.events.try_recv() {
             if let Some(i) = self.slots.iter().position(|slot| slot.id == id) {
@@ -592,7 +619,16 @@ impl App {
                 },
                 Action::Autostart,
             ),
-            MenuEntry::item("Quit", Action::Quit),
+            MenuEntry::Item {
+                label: self.updater.label(),
+                enabled: !self.demo && self.updater.enabled(),
+                action: Action::Update,
+            },
+            MenuEntry::Item {
+                label: "Quit".into(),
+                enabled: !self.updater.installing(),
+                action: Action::Quit,
+            },
         ];
         let usage = self.slots[self.active]
             .view
@@ -600,7 +636,7 @@ impl App {
             .map(|s| (s.used_fraction(), s.elapsed_fraction()));
         let active = &self.slots[self.active];
         let title = format!("TokenKeeper · {}", active.id.name());
-        let summary = self
+        let mut summary = self
             .slots
             .iter()
             .filter_map(|slot| {
@@ -616,16 +652,13 @@ impl App {
             })
             .collect::<Vec<_>>()
             .join("\n");
-        crate::linux_tray::update(
-            usage,
-            &title,
-            if summary.is_empty() {
-                "Sign in from Accounts in the tray menu"
-            } else {
-                &summary
-            },
-            menu,
-        );
+        if summary.is_empty() {
+            summary.push_str("Sign in from Accounts in the tray menu");
+        }
+        if !self.demo {
+            summary.push_str(&format!("\n{}", self.updater.status()));
+        }
+        crate::linux_tray::update(usage, &title, &summary, menu);
     }
 }
 fn light_theme() -> bool {
@@ -658,6 +691,7 @@ mod tests {
         let (tx, events) = mpsc::channel();
         let snap = Rc::new(crate::mock::simulated_codex(0.33));
         let app = App {
+            updater: crate::updater::Updater::without_automatic_check(),
             window: None,
             slots: ProviderId::ALL
                 .iter()

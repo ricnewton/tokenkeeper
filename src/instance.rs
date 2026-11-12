@@ -83,3 +83,16 @@ mod platform {
     }
 }
 pub use platform::acquire;
+
+/// An updater restart may reach main before the old Windows process has exited.
+/// Ordinary launches still fail immediately when another instance owns the lock.
+pub fn acquire_for_startup(restarting: bool) -> Result<Option<platform::Guard>, String> {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    loop {
+        let guard = acquire()?;
+        if guard.is_some() || !restarting || std::time::Instant::now() >= deadline {
+            return Ok(guard);
+        }
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+}

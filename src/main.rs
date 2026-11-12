@@ -11,6 +11,7 @@ mod model;
 mod opencode;
 mod provider;
 mod tracker;
+mod updater;
 mod worker;
 
 #[cfg(windows)]
@@ -53,9 +54,9 @@ mod linux_app;
 #[cfg(target_os = "linux")]
 mod linux_panel;
 #[cfg(target_os = "linux")]
-mod linux_window;
-#[cfg(target_os = "linux")]
 mod linux_tray;
+#[cfg(target_os = "linux")]
+mod linux_window;
 #[cfg(windows)]
 mod popup;
 #[cfg(windows)]
@@ -79,7 +80,9 @@ fn main() {
     let _instance = if preview {
         None
     } else {
-        match instance::acquire() {
+        match instance::acquire_for_startup(
+            std::env::args().any(|arg| arg == updater::RESTART_ARGUMENT),
+        ) {
             Ok(Some(guard)) => Some(guard),
             Ok(None) => {
                 eprintln!(
@@ -95,11 +98,12 @@ fn main() {
     };
     if std::env::args().any(|arg| arg == "--check-codex" || arg == "--check-opencode") {
         use crate::provider::Provider;
-        let mut provider: Box<dyn Provider> = if std::env::args().any(|arg| arg == "--check-opencode") {
-            Box::new(opencode::OpenCode::default())
-        } else {
-            Box::new(codex::Codex::default())
-        };
+        let mut provider: Box<dyn Provider> =
+            if std::env::args().any(|arg| arg == "--check-opencode") {
+                Box::new(opencode::OpenCode::default())
+            } else {
+                Box::new(codex::Codex::default())
+            };
         let name = provider.id().name();
         let mut usage = None;
         if !provider.load() {
@@ -123,7 +127,9 @@ fn main() {
                 std::process::exit(1);
             }
             Err(crate::provider::FetchError::SignedOut) => {
-                eprintln!("{name} session was rejected. Sign in again from the TokenKeeper tray menu.");
+                eprintln!(
+                    "{name} session was rejected. Sign in again from the TokenKeeper tray menu."
+                );
                 std::process::exit(1);
             }
         }

@@ -136,6 +136,8 @@ struct App {
     icon_size: u32,
     show_menu: Submenu,
     refresh_item: MenuItem,
+    update_item: MenuItem,
+    updater: crate::updater::Updater,
     autostart_item: CheckMenuItem,
     quit_item: MenuItem,
     glance: Popup,
@@ -154,6 +156,7 @@ impl App {
     fn new() -> Self {
         autostart::follow_exe();
 
+        let update_item = MenuItem::new("Check for update", true, None);
         let refresh_item = MenuItem::new("Refresh now", true, None);
         let autostart_item = CheckMenuItem::new("Autostart", true, autostart::is_enabled(), None);
         let quit_item = MenuItem::new("Quit", true, None);
@@ -194,6 +197,7 @@ impl App {
         menu.append(&refresh_item).unwrap();
         menu.append(&PredefinedMenuItem::separator()).unwrap();
         menu.append(&autostart_item).unwrap();
+        menu.append(&update_item).unwrap();
         menu.append(&quit_item).unwrap();
 
         let light_taskbar = taskbar_is_light();
@@ -218,6 +222,8 @@ impl App {
             icon_size,
             show_menu,
             refresh_item,
+            update_item,
+            updater: crate::updater::Updater::new(),
             autostart_item,
             quit_item,
             glance,
@@ -257,6 +263,19 @@ impl App {
                     WM_TIMER => {
                         let id = msg.wParam.0;
                         if id == house_timer {
+                            let mut update_changed = self.updater.poll();
+                            if self.updater.ready_to_restart() {
+                                for slot in &mut self.slots {
+                                    slot.worker.stop();
+                                }
+                                if self.slots.iter().all(|slot| slot.worker.is_stopped()) {
+                                    self.updater.restart();
+                                    update_changed = true;
+                                }
+                            }
+                            if update_changed {
+                                self.refresh();
+                            }
                             let (light, size) = (taskbar_is_light(), tray_icon_size());
                             if light != self.light_taskbar || size != self.icon_size {
                                 self.light_taskbar = light;
@@ -481,7 +500,10 @@ impl App {
     fn on_menu(&mut self, ev: MenuEvent) -> bool {
         let id = &ev.id;
         if *id == *self.quit_item.id() {
-            return false;
+            return self.updater.installing();
+        } else if *id == *self.update_item.id() {
+            self.updater.activate();
+            self.refresh();
         } else if let Some(i) = self.slots.iter().position(|s| s.show_item.id() == id) {
             self.select(i);
         } else if let Some(s) = self.slots.iter().find(|s| s.sign_item.id() == id) {
@@ -503,14 +525,20 @@ impl App {
     }
 
     fn refresh(&self) {
+        self.update_item.set_text(self.updater.label());
+        self.update_item.set_enabled(self.updater.enabled());
+        self.quit_item.set_enabled(!self.updater.installing());
+        let _ = self
+            .tray
+            .set_tooltip(Some(format!("TokenKeeper — {}", self.updater.status())));
         let targets = switch_targets(self.slots.iter().map(|s| &s.view));
         let mut position = 0;
         for (i, s) in self.slots.iter().enumerate() {
             s.sign_item.set_text(s.sign_text());
             s.sign_item.set_enabled(!matches!(s.view, View::Loading));
             s.show_item.set_checked(i == self.active);
-            let list = targets.contains(&i)
-                || (i == self.active && !matches!(s.view, View::SignedOut(_)));
+            let list =
+                targets.contains(&i) || (i == self.active && !matches!(s.view, View::SignedOut(_)));
             if list != s.listed.get() {
                 let _ = if list {
                     self.show_menu.insert(&s.show_item, position)
